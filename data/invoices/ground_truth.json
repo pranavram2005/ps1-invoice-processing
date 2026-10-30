@@ -1,0 +1,354 @@
+{
+  "generated_at": "2026-10-30T18:49:47.206Z",
+  "note": "True field values of the generated sample invoices, written directly from the generator definitions. Not model output - this is what the documents actually say.",
+  "invoices": [
+    {
+      "file": "INV-MER-0881_meridian_happy.pdf",
+      "layout": "meridian",
+      "scanned": false,
+      "vendor_name": "Meridian Office Supplies LLP",
+      "vendor_gstin": "29AACFM5678B1Z3",
+      "invoice_number": "MER/2026/0881",
+      "invoice_date": "20/10/2026",
+      "invoice_date_iso": "2026-10-20",
+      "currency": "INR",
+      "po_reference": "PO-4472",
+      "po_placement": "header",
+      "line_items": [
+        {
+          "description": "A4 copier paper, 75 GSM, 500 sheets/ream",
+          "quantity": 120,
+          "unit_price": 310,
+          "line_total": 37200
+        },
+        {
+          "description": "Whiteboard markers, assorted colours",
+          "quantity": 240,
+          "unit_price": 45,
+          "line_total": 10800
+        },
+        {
+          "description": "Box files, foolscap, laminated board",
+          "quantity": 180,
+          "unit_price": 165,
+          "line_total": 29700
+        },
+        {
+          "description": "Desk organiser trays, 3-tier",
+          "quantity": 95,
+          "unit_price": 420,
+          "line_total": 39900
+        },
+        {
+          "description": "Printer toner cartridge, 26A compatible",
+          "quantity": 38,
+          "unit_price": 2290,
+          "line_total": 87020
+        }
+      ],
+      "subtotal": 204620,
+      "tax_amount": 36831.6,
+      "total_amount": 241451.6,
+      "computed_total": 241451.6,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "APPROVE",
+        "because": "all nine checks pass; total is 3.4% under PO-4472"
+      }
+    },
+    {
+      "file": "INV-SSW-2211_sharma_split_po.pdf",
+      "layout": "sharma",
+      "scanned": false,
+      "vendor_name": "Sharma Steel Works Private Limited",
+      "vendor_gstin": "27AABCS1234A1Z5",
+      "invoice_number": "SSW/2026/2211",
+      "invoice_date": "22/10/2026",
+      "invoice_date_iso": "2026-10-22",
+      "currency": "INR",
+      "po_reference": "PO-4471",
+      "po_placement": "header",
+      "line_items": [
+        {
+          "description": "MS angles 50 x 50 x 6 mm, IS 2062 E250",
+          "quantity": 4200,
+          "unit_price": 61.5,
+          "line_total": 258300
+        },
+        {
+          "description": "MS flats 65 x 8 mm",
+          "quantity": 2600,
+          "unit_price": 58,
+          "line_total": 150800
+        },
+        {
+          "description": "Galvanised purlins, Z-section 200 mm",
+          "quantity": 1150,
+          "unit_price": 69,
+          "line_total": 79350
+        },
+        {
+          "description": "Cutting, drilling and surface preparation",
+          "quantity": 1,
+          "unit_price": 20050,
+          "line_total": 20050
+        }
+      ],
+      "subtotal": 508500,
+      "tax_amount": 91530,
+      "total_amount": 600030,
+      "computed_total": 600030,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "REJECT",
+        "because": "R6 - PO-4471 already carries 5,00,000 of prior billing, so this takes it past its value"
+      }
+    },
+    {
+      "file": "INV-NL-118_nalanda_original.pdf",
+      "layout": "nalanda",
+      "scanned": false,
+      "vendor_name": "Nalanda Print & Packaging",
+      "vendor_gstin": "33AAFCN9012C1Z7",
+      "invoice_number": "NL/2026/118",
+      "invoice_date": "14/10/2026",
+      "invoice_date_iso": "2026-10-14",
+      "currency": "INR",
+      "po_reference": "PO-4473",
+      "po_placement": "remarks",
+      "line_items": [
+        {
+          "description": "Product brochure printing - 25,000 copies, 8 page saddle-stitched, 170 GSM art paper, including design proofs, CTP plates, lamination and delivery to Bengaluru warehouse",
+          "quantity": 1,
+          "unit_price": 176400,
+          "line_total": 176400
+        }
+      ],
+      "subtotal": 176400,
+      "tax_amount": null,
+      "total_amount": 176400,
+      "computed_total": 176400,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "APPROVE",
+        "because": "legitimate first part-bill against the annual print programme PO"
+      }
+    },
+    {
+      "file": "INV-NL-127_nalanda_reissue.pdf",
+      "layout": "nalanda",
+      "scanned": false,
+      "vendor_name": "Nalanda Print & Packaging",
+      "vendor_gstin": "33AAFCN9012C1Z7",
+      "invoice_number": "NL/2026/127",
+      "invoice_date": "14/10/2026",
+      "invoice_date_iso": "2026-10-14",
+      "currency": "INR",
+      "po_reference": "PO-4473",
+      "po_placement": "remarks",
+      "line_items": [
+        {
+          "description": "Product brochure printing - 25,000 copies, 8 page saddle-stitched, 170 GSM art paper, including design proofs, CTP plates, lamination and delivery to Bengaluru warehouse",
+          "quantity": 1,
+          "unit_price": 176400,
+          "line_total": 176400
+        }
+      ],
+      "subtotal": 176400,
+      "tax_amount": null,
+      "total_amount": 176400,
+      "computed_total": 176400,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R7 - same vendor, amount and date as NL/2026/118 under a different number; a hash check sees nothing"
+      }
+    },
+    {
+      "file": "INV-KAV-7731_kaveri_scanned.pdf",
+      "layout": "kaveri",
+      "scanned": true,
+      "vendor_name": "Kaveri Logistics Private Limited",
+      "vendor_gstin": "36AAGCK3456D1Z9",
+      "invoice_number": "KAV/2026/7731",
+      "invoice_date": "17/10/2026",
+      "invoice_date_iso": "2026-10-17",
+      "currency": "INR",
+      "po_reference": "PO-4474",
+      "po_placement": "footnote",
+      "line_items": [
+        {
+          "description": "Inbound FTL, Chennai Port to Hosur plant, 32 ft MXL",
+          "quantity": 18,
+          "unit_price": 11400,
+          "line_total": 205200
+        },
+        {
+          "description": "Inbound FTL, Chennai Port to Sriperumbudur stores",
+          "quantity": 9,
+          "unit_price": 7850,
+          "line_total": 70650
+        },
+        {
+          "description": "Detention charges beyond free time",
+          "quantity": 6,
+          "unit_price": 1200,
+          "line_total": 7200
+        }
+      ],
+      "subtotal": 283050,
+      "tax_amount": 14152.5,
+      "total_amount": 297202.5,
+      "computed_total": 297202.5,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R9 - image-only PDF, so no extracted value can be verified against the file and confidence drops below the floor"
+      }
+    },
+    {
+      "file": "INV-ORB-5540_orbit_no_po.pdf",
+      "layout": "orbit",
+      "scanned": false,
+      "vendor_name": "Orbit Facility Services",
+      "vendor_gstin": "07AAHCO7890E1Z1",
+      "invoice_number": "ORB/2026/5540",
+      "invoice_date": "25/10/2026",
+      "invoice_date_iso": "2026-10-25",
+      "currency": "INR",
+      "po_reference": null,
+      "po_placement": null,
+      "line_items": [
+        {
+          "description": "Housekeeping manpower deployment - October 2026",
+          "quantity": 572,
+          "unit_price": 210,
+          "line_total": 120120
+        },
+        {
+          "description": "Cleaning chemicals and consumables",
+          "quantity": 1,
+          "unit_price": 8400,
+          "line_total": 8400
+        }
+      ],
+      "subtotal": 128520,
+      "tax_amount": 23133.6,
+      "total_amount": 151653.6,
+      "computed_total": 151653.6,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R4 - no PO named, so the match falls back to vendor/amount/date and is capped below the floor by design"
+      }
+    },
+    {
+      "file": "INV-SSW-2240_sharma_within_tolerance.pdf",
+      "layout": "sharma",
+      "scanned": false,
+      "vendor_name": "Sharma Steel Works Private Limited",
+      "vendor_gstin": "27AABCS1234A1Z5",
+      "invoice_number": "SSW/2026/2240",
+      "invoice_date": "24/10/2026",
+      "invoice_date_iso": "2026-10-24",
+      "currency": "INR",
+      "po_reference": "PO-4477",
+      "po_placement": "footnote",
+      "line_items": [
+        {
+          "description": "Mezzanine fabrication - cutting, welding and assembly",
+          "quantity": 1,
+          "unit_price": 112000,
+          "line_total": 112000
+        },
+        {
+          "description": "Site erection labour",
+          "quantity": 415,
+          "unit_price": 42,
+          "line_total": 17430
+        }
+      ],
+      "subtotal": 129430,
+      "tax_amount": 23297.4,
+      "total_amount": 152727.4,
+      "computed_total": 152727.4,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "APPROVE",
+        "because": "R5 - 1.82% over PO-4477, inside the 2% tolerance, approved with the variance stated"
+      }
+    },
+    {
+      "file": "INV-SSW-2241_sharma_over_tolerance.pdf",
+      "layout": "sharma",
+      "scanned": false,
+      "vendor_name": "Sharma Steel Works Private Limited",
+      "vendor_gstin": "27AABCS1234A1Z5",
+      "invoice_number": "SSW/2026/2241",
+      "invoice_date": "26/10/2026",
+      "invoice_date_iso": "2026-10-26",
+      "currency": "INR",
+      "po_reference": "PO-4482",
+      "po_placement": "header",
+      "line_items": [
+        {
+          "description": "MS plates 12 mm, IS 2062 E250, cut to size",
+          "quantity": 5400,
+          "unit_price": 64,
+          "line_total": 345600
+        },
+        {
+          "description": "MS channels 150 x 75 mm",
+          "quantity": 1780,
+          "unit_price": 61.75,
+          "line_total": 109915
+        }
+      ],
+      "subtotal": 455515,
+      "tax_amount": 81992.7,
+      "total_amount": 537507.7,
+      "computed_total": 537507.7,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R5 - 7.50% over PO-4482: past the 2% tolerance, inside the 10% reject threshold"
+      }
+    },
+    {
+      "file": "INV-MER-0902_meridian_arithmetic.pdf",
+      "layout": "meridian",
+      "scanned": false,
+      "vendor_name": "Meridian Office Supplies LLP",
+      "vendor_gstin": "29AACFM5678B1Z3",
+      "invoice_number": "MER/2026/0902",
+      "invoice_date": "27/10/2026",
+      "invoice_date_iso": "2026-10-27",
+      "currency": "INR",
+      "po_reference": "PO-4481",
+      "po_placement": "header",
+      "line_items": [
+        {
+          "description": "Laptop docking station, USB-C triple display",
+          "quantity": 24,
+          "unit_price": 7450,
+          "line_total": 178800
+        },
+        {
+          "description": "Wireless keyboard and mouse combo",
+          "quantity": 40,
+          "unit_price": 1980,
+          "line_total": 79200
+        }
+      ],
+      "subtotal": 258000,
+      "tax_amount": 46440,
+      "total_amount": 279440,
+      "computed_total": 304440,
+      "total_is_misstated": true,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R2 - line items plus tax come to 3,04,440.00 but the invoice states 2,79,440.00"
+      }
+    }
+  ]
+}

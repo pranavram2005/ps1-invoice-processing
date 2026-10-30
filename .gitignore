@@ -1,0 +1,44 @@
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# The seeded SQLite DB and the stored PDF blobs ARE committed. Render's free
+# tier has an ephemeral filesystem and spins down when idle, so a deploy that
+# seeded itself on boot would re-run every sample invoice on every cold start.
+# Shipping the pre-seeded database means the deployed app opens with history and
+# costs nothing to wake. Regenerate it any time with:
+#     python -m backend.seed --runs --clear
+data/invoices.db-journal
+data/ui-check/
+
+# The generated sample invoices ARE committed - they are the test fixtures.
+!data/invoices/
+!data/invoices/*.pdf
+
+# Node (invoice generator only; not part of the running app)
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log

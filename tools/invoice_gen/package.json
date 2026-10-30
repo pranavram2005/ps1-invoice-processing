@@ -1,0 +1,13 @@
+{
+  "name": "ps1-invoice-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-off generator for the sample invoice PDFs. Not part of the running application.",
+  "scripts": {
+    "generate": "node generate.js"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^24.2.1"
+  }
+}

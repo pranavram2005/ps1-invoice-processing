@@ -1,0 +1,747 @@
+{
+  "note": "Offline extraction fixtures: the true field values of the bundled sample invoices, with provenance quotes taken verbatim from each PDF's text layer. These are ground truth, NOT recorded model output - they exist to test the deterministic half of the pipeline and to let the demo run without an API key. They say nothing about extraction accuracy.",
+  "source": "tools/make_fixtures.py from data/invoices/ground_truth.json",
+  "keyed_by": "sha256 of the PDF bytes",
+  "fixtures": {
+    "f3ff22b105357067b82b7b5be2103813839b04a20b0c271b734c09cbeae33cef": {
+      "file": "INV-MER-0881_meridian_happy.pdf",
+      "sha256_short": "f3ff22b105357067",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "APPROVE",
+        "because": "all nine checks pass; total is 3.4% under PO-4472"
+      },
+      "extraction": {
+        "vendor_name": "Meridian Office Supplies LLP",
+        "vendor_gstin": "29AACFM5678B1Z3",
+        "invoice_number": "MER/2026/0881",
+        "invoice_date": "20/10/2026",
+        "invoice_date_iso": "2026-10-20",
+        "currency": "INR",
+        "po_reference": "PO-4472",
+        "line_items": [
+          {
+            "description": "A4 copier paper, 75 GSM, 500 sheets/ream",
+            "quantity": 120,
+            "unit_price": 310,
+            "line_total": 37200
+          },
+          {
+            "description": "Whiteboard markers, assorted colours",
+            "quantity": 240,
+            "unit_price": 45,
+            "line_total": 10800
+          },
+          {
+            "description": "Box files, foolscap, laminated board",
+            "quantity": 180,
+            "unit_price": 165,
+            "line_total": 29700
+          },
+          {
+            "description": "Desk organiser trays, 3-tier",
+            "quantity": 95,
+            "unit_price": 420,
+            "line_total": 39900
+          },
+          {
+            "description": "Printer toner cartridge, 26A compatible",
+            "quantity": 38,
+            "unit_price": 2290,
+            "line_total": 87020
+          }
+        ],
+        "subtotal": 204620,
+        "tax_amount": 36831.6,
+        "total_amount": 241451.6,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Meridian Office Supplies LLP O F"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "560004, Karnataka GSTIN 29AACFM5678B1Z3 \u00b7 PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "INVOICE Invoice No. MER/2026/0881 Invoice Date"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "MER/2026/0881 Invoice Date 20/10/2026 Due Date"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "18,415.80 Total payable INR 2,41,451.60 Payment"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "19/11/2026 Purchase Order PO-4472 B I"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "87,020.00 Taxable value 2,04,620.00 CGST @"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Total payable INR 2,41,451.60 Payment within"
+          }
+        ]
+      }
+    },
+    "7b5a612db620d396f0e339239cf1ec5ceb4db9630c166503301b6cf97c9a9f50": {
+      "file": "INV-SSW-2211_sharma_split_po.pdf",
+      "sha256_short": "7b5a612db620d396",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "REJECT",
+        "because": "R6 - PO-4471 already carries 5,00,000 of prior billing, so this takes it past its value"
+      },
+      "extraction": {
+        "vendor_name": "Sharma Steel Works Private Limited",
+        "vendor_gstin": "27AABCS1234A1Z5",
+        "invoice_number": "SSW/2026/2211",
+        "invoice_date": "22/10/2026",
+        "invoice_date_iso": "2026-10-22",
+        "currency": "INR",
+        "po_reference": "PO-4471",
+        "line_items": [
+          {
+            "description": "MS angles 50 x 50 x 6 mm, IS 2062 E250",
+            "quantity": 4200,
+            "unit_price": 61.5,
+            "line_total": 258300
+          },
+          {
+            "description": "MS flats 65 x 8 mm",
+            "quantity": 2600,
+            "unit_price": 58,
+            "line_total": 150800
+          },
+          {
+            "description": "Galvanised purlins, Z-section 200 mm",
+            "quantity": 1150,
+            "unit_price": 69,
+            "line_total": 79350
+          },
+          {
+            "description": "Cutting, drilling and surface preparation",
+            "quantity": 1,
+            "unit_price": 20050,
+            "line_total": 20050
+          }
+        ],
+        "subtotal": 508500,
+        "tax_amount": 91530,
+        "total_amount": 600030,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Sharma Steel Works Private Limited Structural Steel"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "| accounts@sharmasteelworks.example GSTIN 27AABCS1234A1Z5 | PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "29AABCH4455L1ZQ Invoice No. SSW/2026/2211 Dated 22/10/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. SSW/2026/2211 Dated 22/10/2026 Payment due"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "Grand Total ( INR ) 6,00,030.00"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "Buyer's Order No. PO-4471 Place of"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "20,050.00 Taxable Value 5,08,500.00 IGST @"
+          },
+          {
+            "field": "tax_amount",
+            "page": 1,
+            "quote": "IGST @ 18% 91,530.00 Grand Total"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Grand Total (INR) 6,00,030.00 Phase 2"
+          }
+        ]
+      }
+    },
+    "f75a128e8a4d91208cff12a39573230b780724ca7825471b0d78542cf6b45b17": {
+      "file": "INV-NL-118_nalanda_original.pdf",
+      "sha256_short": "f75a128e8a4d9120",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "APPROVE",
+        "because": "legitimate first part-bill against the annual print programme PO"
+      },
+      "extraction": {
+        "vendor_name": "Nalanda Print & Packaging",
+        "vendor_gstin": "33AAFCN9012C1Z7",
+        "invoice_number": "NL/2026/118",
+        "invoice_date": "14/10/2026",
+        "invoice_date_iso": "2026-10-14",
+        "currency": "INR",
+        "po_reference": "PO-4473",
+        "line_items": [
+          {
+            "description": "Product brochure printing - 25,000 copies, 8 page saddle-stitched, 170 GSM art paper, including design proofs, CTP plates, lamination and delivery to Bengaluru warehouse",
+            "quantity": 1,
+            "unit_price": 176400,
+            "line_total": 176400
+          }
+        ],
+        "subtotal": 176400,
+        "tax_amount": null,
+        "total_amount": 176400,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Nalanda Print & Packaging I N"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "Due 13/11/2026 GSTIN 33AAFCN9012C1Z7 INVOICE TO"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "nalandaprint@example.net Invoice No. NL/2026/118 Date 14/10/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. NL/2026/118 Date 14/10/2026 Due 13/11/2026"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "your Purchase Order PO-4473 dated 01-09-2026"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "4911 1 lot 1,76,400.00 TOTAL PAYABLE"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "4911 1 lot 1,76,400.00 TOTAL PAYABLE"
+          }
+        ]
+      }
+    },
+    "febd5f7e8441de0fcb3ed1d55457c9625453fb5178b831464bd97af76bd8c1ae": {
+      "file": "INV-NL-127_nalanda_reissue.pdf",
+      "sha256_short": "febd5f7e8441de0f",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R7 - same vendor, amount and date as NL/2026/118 under a different number; a hash check sees nothing"
+      },
+      "extraction": {
+        "vendor_name": "Nalanda Print & Packaging",
+        "vendor_gstin": "33AAFCN9012C1Z7",
+        "invoice_number": "NL/2026/127",
+        "invoice_date": "14/10/2026",
+        "invoice_date_iso": "2026-10-14",
+        "currency": "INR",
+        "po_reference": "PO-4473",
+        "line_items": [
+          {
+            "description": "Product brochure printing - 25,000 copies, 8 page saddle-stitched, 170 GSM art paper, including design proofs, CTP plates, lamination and delivery to Bengaluru warehouse",
+            "quantity": 1,
+            "unit_price": 176400,
+            "line_total": 176400
+          }
+        ],
+        "subtotal": 176400,
+        "tax_amount": null,
+        "total_amount": 176400,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Nalanda Print & Packaging I N"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "Due 13/11/2026 GSTIN 33AAFCN9012C1Z7 INVOICE TO"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "nalandaprint@example.net Invoice No. NL/2026/127 Date 14/10/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. NL/2026/127 Date 14/10/2026 Due 13/11/2026"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "your Purchase Order PO-4473 dated 01-09-2026"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "4911 1 lot 1,76,400.00 TOTAL PAYABLE"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "4911 1 lot 1,76,400.00 TOTAL PAYABLE"
+          }
+        ]
+      }
+    },
+    "63b335e98eed4970d2d7d077dc978ebd9f2328032f48ac6e2c384678a0bc0f60": {
+      "file": "INV-KAV-7731_kaveri_scanned.pdf",
+      "sha256_short": "63b335e98eed4970",
+      "pdf_kind": "scanned",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R9 - image-only PDF, so no extracted value can be verified against the file and confidence drops below the floor"
+      },
+      "extraction": {
+        "vendor_name": "Kaveri Logistics Private Limited",
+        "vendor_gstin": "36AAGCK3456D1Z9",
+        "invoice_number": "KAV/2026/7731",
+        "invoice_date": "17/10/2026",
+        "invoice_date_iso": "2026-10-17",
+        "currency": "INR",
+        "po_reference": "PO-4474",
+        "line_items": [
+          {
+            "description": "Inbound FTL, Chennai Port to Hosur plant, 32 ft MXL",
+            "quantity": 18,
+            "unit_price": 11400,
+            "line_total": 205200
+          },
+          {
+            "description": "Inbound FTL, Chennai Port to Sriperumbudur stores",
+            "quantity": 9,
+            "unit_price": 7850,
+            "line_total": 70650
+          },
+          {
+            "description": "Detention charges beyond free time",
+            "quantity": 6,
+            "unit_price": 1200,
+            "line_total": 7200
+          }
+        ],
+        "subtotal": 283050,
+        "tax_amount": 14152.5,
+        "total_amount": 297202.5,
+        "notes": "Read from a scanned page image - there is no digital text on this document. Figures were cross-checked against the totals block.",
+        "model_confidence": 0.82,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "vendor name: Kaveri Logistics Private Limited"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "vendor gstin: 36AAGCK3456D1Z9"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "invoice number: KAV/2026/7731"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "invoice date: 17/10/2026"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "currency: INR"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "po reference: PO-4474"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "subtotal: 2,83,050.00"
+          },
+          {
+            "field": "tax_amount",
+            "page": 1,
+            "quote": "tax amount: 14,152.50"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "total amount: 2,97,202.50"
+          }
+        ]
+      }
+    },
+    "607986a46a1587a45ca97941de5fffdd0cbe899744c4dd9f2cddcf4853bb2c1d": {
+      "file": "INV-ORB-5540_orbit_no_po.pdf",
+      "sha256_short": "607986a46a1587a4",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R4 - no PO named, so the match falls back to vendor/amount/date and is capped below the floor by design"
+      },
+      "extraction": {
+        "vendor_name": "Orbit Facility Services",
+        "vendor_gstin": "07AAHCO7890E1Z1",
+        "invoice_number": "ORB/2026/5540",
+        "invoice_date": "25/10/2026",
+        "invoice_date_iso": "2026-10-25",
+        "currency": "INR",
+        "po_reference": null,
+        "line_items": [
+          {
+            "description": "Housekeeping manpower deployment - October 2026",
+            "quantity": 572,
+            "unit_price": 210,
+            "line_total": 120120
+          },
+          {
+            "description": "Cleaning chemicals and consumables",
+            "quantity": 1,
+            "unit_price": 8400,
+            "line_total": 8400
+          }
+        ],
+        "subtotal": 128520,
+        "tax_amount": 23133.6,
+        "total_amount": 151653.6,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "O Orbit Facility Services INTEGRATED FACILITY"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "\u00b7 invoices@orbitfacility.example GSTIN 07AAHCO7890E1Z1 TAX INVOICE"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "DETAILS Invoice number ORB/2026/5540 Invoice date"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "ORB/2026/5540 Invoice date 25/10/2026 Payment due"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "11,566.80 Amount payable INR 1,51,653.60 Monthly"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "8,400.00 Taxable value 1,28,520.00 CGST @"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Amount payable INR 1,51,653.60 Monthly service"
+          }
+        ]
+      }
+    },
+    "2bc58ceaa0d7af8a3e12864007b9bf7673b1989d8c8e0f5b068d103feae8d7a4": {
+      "file": "INV-SSW-2240_sharma_within_tolerance.pdf",
+      "sha256_short": "2bc58ceaa0d7af8a",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "APPROVE",
+        "because": "R5 - 1.82% over PO-4477, inside the 2% tolerance, approved with the variance stated"
+      },
+      "extraction": {
+        "vendor_name": "Sharma Steel Works Private Limited",
+        "vendor_gstin": "27AABCS1234A1Z5",
+        "invoice_number": "SSW/2026/2240",
+        "invoice_date": "24/10/2026",
+        "invoice_date_iso": "2026-10-24",
+        "currency": "INR",
+        "po_reference": "PO-4477",
+        "line_items": [
+          {
+            "description": "Mezzanine fabrication - cutting, welding and assembly",
+            "quantity": 1,
+            "unit_price": 112000,
+            "line_total": 112000
+          },
+          {
+            "description": "Site erection labour",
+            "quantity": 415,
+            "unit_price": 42,
+            "line_total": 17430
+          }
+        ],
+        "subtotal": 129430,
+        "tax_amount": 23297.4,
+        "total_amount": 152727.4,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Sharma Steel Works Private Limited Structural Steel"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "| accounts@sharmasteelworks.example GSTIN 27AABCS1234A1Z5 | PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "29AABCH4455L1ZQ Invoice No. SSW/2026/2240 Dated 24/10/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. SSW/2026/2240 Dated 24/10/2026 Payment due"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "Grand Total ( INR ) 1,52,727.40"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "against Purchase Order PO-4477 and our"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "17,430.00 Taxable Value 1,29,430.00 IGST @"
+          },
+          {
+            "field": "tax_amount",
+            "page": 1,
+            "quote": "IGST @ 18% 23,297.40 Grand Total"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Grand Total (INR) 1,52,727.40 * Billed"
+          }
+        ]
+      }
+    },
+    "7ffb26cdac2d4026fb156b4bcf24cac19c7bbf58c0b418bc6c86749bfd615771": {
+      "file": "INV-SSW-2241_sharma_over_tolerance.pdf",
+      "sha256_short": "7ffb26cdac2d4026",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R5 - 7.50% over PO-4482: past the 2% tolerance, inside the 10% reject threshold"
+      },
+      "extraction": {
+        "vendor_name": "Sharma Steel Works Private Limited",
+        "vendor_gstin": "27AABCS1234A1Z5",
+        "invoice_number": "SSW/2026/2241",
+        "invoice_date": "26/10/2026",
+        "invoice_date_iso": "2026-10-26",
+        "currency": "INR",
+        "po_reference": "PO-4482",
+        "line_items": [
+          {
+            "description": "MS plates 12 mm, IS 2062 E250, cut to size",
+            "quantity": 5400,
+            "unit_price": 64,
+            "line_total": 345600
+          },
+          {
+            "description": "MS channels 150 x 75 mm",
+            "quantity": 1780,
+            "unit_price": 61.75,
+            "line_total": 109915
+          }
+        ],
+        "subtotal": 455515,
+        "tax_amount": 81992.7,
+        "total_amount": 537507.7,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Sharma Steel Works Private Limited Structural Steel"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "| accounts@sharmasteelworks.example GSTIN 27AABCS1234A1Z5 | PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "29AABCH4455L1ZQ Invoice No. SSW/2026/2241 Dated 26/10/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. SSW/2026/2241 Dated 26/10/2026 Payment due"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "Grand Total ( INR ) 5,37,507.70"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "Buyer's Order No. PO-4482 Place of"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "1,09,915.00 Taxable Value 4,55,515.00 IGST @"
+          },
+          {
+            "field": "tax_amount",
+            "page": 1,
+            "quote": "IGST @ 18% 81,992.70 Grand Total"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Grand Total (INR) 5,37,507.70 Rate revision"
+          }
+        ]
+      }
+    },
+    "6533950ae07cfe8758bd14de03b930ec27f92609f0ccef0a4e1913d28c1d1539": {
+      "file": "INV-MER-0902_meridian_arithmetic.pdf",
+      "sha256_short": "6533950ae07cfe87",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R2 - line items plus tax come to 3,04,440.00 but the invoice states 2,79,440.00"
+      },
+      "extraction": {
+        "vendor_name": "Meridian Office Supplies LLP",
+        "vendor_gstin": "29AACFM5678B1Z3",
+        "invoice_number": "MER/2026/0902",
+        "invoice_date": "27/10/2026",
+        "invoice_date_iso": "2026-10-27",
+        "currency": "INR",
+        "po_reference": "PO-4481",
+        "line_items": [
+          {
+            "description": "Laptop docking station, USB-C triple display",
+            "quantity": 24,
+            "unit_price": 7450,
+            "line_total": 178800
+          },
+          {
+            "description": "Wireless keyboard and mouse combo",
+            "quantity": 40,
+            "unit_price": 1980,
+            "line_total": 79200
+          }
+        ],
+        "subtotal": 258000,
+        "tax_amount": 46440,
+        "total_amount": 279440,
+        "notes": "The printed grand total does not equal the line items plus tax. Reported exactly as printed.",
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Meridian Office Supplies LLP O F"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "560004, Karnataka GSTIN 29AACFM5678B1Z3 \u00b7 PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "INVOICE Invoice No. MER/2026/0902 Invoice Date"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "MER/2026/0902 Invoice Date 27/10/2026 Due Date"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "23,220.00 Total payable INR 2,79,440.00 Warranty"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "26/11/2026 Purchase Order PO-4481 B I"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "79,200.00 Taxable value 2,58,000.00 CGST @"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Total payable INR 2,79,440.00 Warranty 3"
+          }
+        ]
+      }
+    }
+  }
+}

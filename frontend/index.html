@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoice Processing - PS-1</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo">🧾</div>
+    <div>
+      <h1>Invoice Processing</h1>
+      <p class="tagline">The model extracts. The code decides.</p>
+    </div>
+  </div>
+  <div class="topbar-right" id="env-strip">
+    <span class="env-item"><span class="dot dot-idle" id="health-dot"></span><span id="health-text">connecting…</span></span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab is-active" data-tab="run" role="tab">Run</button>
+  <button class="tab" data-tab="dashboard" role="tab">Dashboard</button>
+  <button class="tab" data-tab="admin" role="tab">Admin</button>
+</nav>
+
+<main>
+
+  <!-- ==================================================== RUN ============ -->
+  <section class="panel is-active" id="panel-run">
+
+    <div class="run-intake">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button"
+           aria-label="Drop an invoice PDF here or click to choose a file">
+        <div class="dz-icon">📄</div>
+        <div class="dz-title">Drop an invoice PDF here</div>
+        <div class="dz-sub">or <button class="linkish" id="browse-btn" type="button">choose a file</button></div>
+        <input type="file" id="file-input" accept="application/pdf" hidden>
+      </div>
+
+      <div class="samples">
+        <div class="samples-head">
+          <h2>Or run a bundled scenario</h2>
+          <p class="hint">Each one is engineered to take a different path through the rules.
+             Run them top to bottom - the duplicate case needs its original processed first.</p>
+        </div>
+        <div class="sample-list" id="sample-list"></div>
+      </div>
+    </div>
+
+    <div class="run-empty" id="run-empty">
+      <p>No run yet. Drop a PDF or pick a scenario above to watch the seven stages execute.</p>
+    </div>
+
+    <div class="run-live" id="run-live" hidden>
+      <div class="run-head">
+        <div>
+          <h2 id="run-filename">—</h2>
+          <div class="run-meta" id="run-meta"></div>
+        </div>
+        <div class="run-actions">
+          <button class="btn btn-ghost" id="expand-btn" type="button">Expand all</button>
+          <button class="btn btn-ghost" id="view-pdf-btn" type="button">View PDF</button>
+          <button class="btn btn-ghost" id="replay-btn" type="button">Re-run</button>
+        </div>
+      </div>
+
+      <div class="timeline" id="timeline"></div>
+
+      <div class="decision" id="decision" hidden></div>
+    </div>
+  </section>
+
+  <!-- ============================================== DASHBOARD ============ -->
+  <section class="panel" id="panel-dashboard">
+    <div class="tiles" id="tiles"></div>
+
+    <div class="table-head">
+      <h2>Processed invoices</h2>
+      <div class="filters" id="decision-filters">
+        <button class="chip is-active" data-filter="ALL">All</button>
+        <button class="chip" data-filter="APPROVE">Approved</button>
+        <button class="chip" data-filter="FLAG">Flagged</button>
+        <button class="chip" data-filter="REJECT">Rejected</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="grid" id="runs-table">
+        <thead><tr>
+          <th data-sort="started_at">When</th>
+          <th data-sort="filename">File</th>
+          <th data-sort="vendor_name">Vendor</th>
+          <th data-sort="invoice_number">Invoice no.</th>
+          <th data-sort="total_amount" class="num">Amount</th>
+          <th data-sort="matched_po">PO</th>
+          <th data-sort="decision">Decision</th>
+          <th data-sort="confidence" class="num">Confidence</th>
+          <th data-sort="duration_ms" class="num">Time</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty-note" id="runs-empty" hidden>No runs match this filter.</p>
+    </div>
+  </section>
+
+  <!-- ================================================== ADMIN ============ -->
+  <section class="panel" id="panel-admin">
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Rule set</h2>
+        <p class="hint">Served from <code>/api/rules</code>, the same definitions the engine
+           applies - so what you read here cannot drift from what ran.</p>
+      </div>
+      <div id="rules-list" class="rules-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Thresholds</h2>
+        <p class="hint">Change a value, save, then re-run any invoice. The decision changes
+           because the rules are configuration, not hardcoded output.</p>
+      </div>
+      <form id="config-form" class="config-form"></form>
+      <div class="card-actions">
+        <button class="btn btn-primary" id="config-save" type="button">Save thresholds</button>
+        <button class="btn btn-ghost" id="config-reset" type="button">Restore defaults</button>
+        <span class="save-note" id="config-note"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Purchase orders</h2>
+        <p class="hint">Stands in for a procurement system. Every read goes through one
+           repository module, so swapping in a real ERP API touches one file.</p>
+      </div>
+      <div class="table-wrap">
+        <table class="grid" id="pos-table">
+          <thead><tr>
+            <th>PO</th><th>Vendor</th><th>Description</th>
+            <th class="num">Value</th><th class="num">Billed</th><th class="num">Remaining</th>
+            <th>Consumed</th><th>Valid</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Approved vendors</h2></div>
+      <div class="table-wrap">
+        <table class="grid" id="vendors-table">
+          <thead><tr>
+            <th>ID</th><th>Name</th><th>Also known as</th><th>GSTIN</th><th>Status</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Model telemetry</h2>
+        <p class="hint">Real API calls only. Cache hits and offline fixture runs are excluded
+           from the latency percentiles and the cost estimate.</p>
+      </div>
+      <div class="tiles tiles-sm" id="telemetry-tiles"></div>
+      <div id="telemetry-models"></div>
+      <p class="hint" id="telemetry-note"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Demo data</h2>
+        <p class="hint">An approved invoice books consumption against its PO, which changes what
+           the next run of the same invoice decides. Reset between takes.</p>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-ghost" id="reseed-btn" type="button">Reset purchase orders</button>
+        <button class="btn btn-danger" id="reseed-all-btn" type="button">Reset everything, including run history</button>
+        <span class="save-note" id="reseed-note"></span>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<div class="tooltip" id="tooltip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

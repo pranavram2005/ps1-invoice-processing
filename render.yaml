@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: ps1-invoice-processing
+    env: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      # Set this in the Render dashboard; it is deliberately not synced from
+      # this file so the key never lands in the repository.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: EXTRACTION_MODEL
+        value: claude-opus-5
+      - key: EXTRACTION_EFFORT
+        value: medium
+      # live | offline | auto. `auto` prefers a real API call and falls back to
+      # the bundled fixtures if the call fails, which keeps a live demo alive
+      # through a dead key or a network blip. The UI always shows which path ran.
+      - key: EXTRACTION_MODE
+        value: auto
+      # Per-stage pacing so the run view is watchable on video. Set to 0 for
+      # true pipeline timings.
+      - key: STAGE_DELAY_MS
+        value: "350"
+      - key: PORT
+        value: "8000"
