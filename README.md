@@ -19,7 +19,7 @@ python -m venv .venv
 .venv/Scripts/activate          # Windows;  source .venv/bin/activate elsewhere
 pip install -r requirements.txt
 
-cp .env.example .env            # then add your ANTHROPIC_API_KEY
+cp .env.example .env            # then add your GEMINI_API_KEY
 uvicorn backend.main:app --reload
 ```
 
@@ -52,7 +52,7 @@ invoices; every stage after it is the real code path. The UI labels such runs
     │
  1. INTAKE          hash the file, store the blob, probe the text layer,
     │               check the hash against previous submissions
- 2. EXTRACT         one Claude call: PDF → schema-guaranteed JSON, with the
+ 2. EXTRACT         one model call: PDF → schema-guaranteed JSON, with the
     │               page and verbatim quote behind every field
  3. NORMALIZE       dates → ISO, amounts → numbers, currency → ISO 4217,
     │               vendor name canonicalised, quoted provenance verified
@@ -139,11 +139,13 @@ was read from. The system then **verifies** each quote against the PDF's own
 text layer with a fuzzy match, and the UI shows the result per field: hover a
 marker to see the quote, the page, and whether it was found.
 
-This is not the Claude API's `citations` feature. Citations would return
-server-side page locations, but they are **incompatible with structured
-outputs** — enabling both on one request returns a 400 — and a schema guarantee
-on a financial extraction is worth more. So provenance is a field *in* the
-schema and `backend/provenance.py` checks it. See
+This is not a server-side citations feature. The Claude API offers one, but it
+is **incompatible with structured outputs** — enabling both on one request
+returns a 400 — and a schema guarantee on a financial extraction is worth more.
+Keeping provenance in the schema also means it survives a change of provider,
+and that what gets shown to a reviewer is a quote the code *checked* rather than
+a location the API asserted. So provenance is a field *in* the schema and
+`backend/provenance.py` checks it. See
 [DECISIONS.md](DECISIONS.md#2-provenance-schema-field-checked-in-code-not-api-citations).
 
 The payoff is that confidence becomes decomposable rather than a bare float:
@@ -185,7 +187,8 @@ backend/
   models.py       pydantic shapes: model output / derived / API surface
   db.py           SQLite; the ERP seam and the audit trail
   rules.py        the nine rules + thresholds + the decision function
-  extract.py      the single Claude call (and the offline fixture path)
+  extract.py      the single model call, provider-dispatched (+ fixture path)
+  gemini.py       the Gemini provider: schema translation and the REST call
   provenance.py   text-layer probe, quote verification, confidence
   normalize.py    dates, currency, canonical vendor names
   matching.py     vendor resolution and PO scoring
@@ -237,7 +240,7 @@ docker compose up --build        # local
 ```
 
 For Render, `render.yaml` is a one-service Docker deploy on the free tier. Set
-`ANTHROPIC_API_KEY` in the dashboard — it is deliberately not synced from the
+`GEMINI_API_KEY` in the dashboard — it is deliberately not synced from the
 file. The image ships the seeded database, so a cold start does no model work.
 
 One container serves the API and the UI from the same origin: one URL, no CORS
@@ -273,13 +276,24 @@ Stated out loud, because each one is a real limit on what this demonstrates.
 
 ## Known limits
 
-- **The live extraction path is unverified end to end.** It is written against
-  the documented API (native PDF input, structured outputs, refusal handling,
-  retry-on-transient), but the key available during the build returned
-  `credit balance is too low`, so no real extraction call has ever succeeded
-  here. Everything downstream of stage 2 is verified against fixtures. Running
-  `python tools/run_one.py INV-MER-0881_meridian_happy.pdf` with a funded key
-  is the one-command check.
+- **The live path is verified on Gemini, not on Anthropic.** All nine scenarios
+  have been run end to end through `gemini-3.5-flash` and each reached its
+  intended decision via its intended rule, with every provenance quote verified
+  against the document. The Anthropic path is still written-but-unrun: the key
+  available during the build returned `credit balance is too low`. Switching
+  providers is `EXTRACTION_PROVIDER=anthropic`, and
+  `python tools/run_one.py INV-MER-0881_meridian_happy.pdf` is the one-command
+  check with a funded key.
+- **Gemini's free tier does not serve the `*-pro` models.** They return 429 with
+  `limit: 0` — a hard refusal, not a throttle — so the default is a flash model.
+  Flash read all nine samples correctly, but a harder vendor layout is the kind
+  of thing a pro model would be expected to handle better.
+- **The free tier also 503s under load.** One of the nine failed that way on the
+  first live pass and succeeded on a re-run. Transient 5xx is retried three
+  times with backoff; past that the run fails honestly rather than guessing.
+- **The Gemini 3.x cost figures in the Admin tab are indicative.** The 2.5-series
+  rates in `config.py` are published list prices; the 3.x entries carry the
+  flash-tier rate forward and are marked unconfirmed in the source.
 - Single-container, single-process. The SSE broker is in-process, so a
   multi-replica deployment would need a shared bus.
 - The duplicate window compares vendor, amount and date. It would not catch a

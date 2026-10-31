@@ -331,3 +331,50 @@ exists to avoid.
 
 The only genuine uncertainty is in reading the document — so that is the only
 thing with a number on it, and the UI prints the arithmetic behind it.
+
+---
+
+## 15. The extraction provider is a seam, not an assumption
+
+**Decision.** Stage 2 dispatches to one of two providers behind a single
+function signature — `(pdf_b64, model) -> (json, latency_ms, in_tokens,
+out_tokens)`. Gemini (`backend/gemini.py`) is the default; Anthropic
+(`backend/extract.py`) is the alternative; `EXTRACTION_PROVIDER` picks. Nothing
+downstream of that tuple knows which one ran.
+
+**Why.** The design claim this project rests on is that *the model extracts and
+the code decides*. If that is true, then which model does the extracting has to
+be a swappable detail — and the only honest way to show it is a seam that a
+second provider actually goes through. It stopped being hypothetical the moment
+the available Anthropic key had no credit and a Gemini key did: the provider
+changed, and the rule engine, the nine scenarios and all 29 rule tests were
+untouched.
+
+**The schema is converted, not copied.** Gemini's `responseSchema` takes an
+OpenAPI subset — one `type` per field rather than `["string", "null"]`, an
+explicit `nullable`, no `additionalProperties`. The tempting move is to write a
+second schema in Gemini's dialect. That would mean two definitions of a
+14-field financial contract drifting apart on the first edit, which is the exact
+failure this codebase avoids with the rule catalogue and the live thresholds.
+So `to_gemini_schema()` translates the one definition at call time.
+
+**Rejected: sniffing the credential shape.** The first version chose its auth
+header by prefix — `AIza...` meant API key, anything else meant an OAuth bearer
+token. This is wrong, and wrong in a way that costs an hour: AI Studio issues
+keys shaped like `AQ.Ab8...` that look exactly like OAuth tokens and are
+rejected as them (bearer → 401, `x-goog-api-key` → 200). Guessing a credential's
+type from its appearance produced a confident, misleading error message. The
+API key is now the default and OAuth is opt-in via `GEMINI_AUTH_MODE`, and the
+401 path states which header it used.
+
+**Rejected: the `google-genai` SDK.** One POST with a JSON body does not justify
+an SDK and its release cadence in the container. `urllib` left
+`requirements.txt` unchanged.
+
+**What the free tier forced.** The `*-pro` models are not throttled on an
+unbilled key, they are refused — 429 with `limit: 0` — and `gemini-2.5-pro` now
+404s for keys without prior access. So the default is `gemini-3.5-flash`, which
+read all nine samples correctly. It also 503s under load: one of the nine failed
+that way on the first full live pass and passed on a re-run, which is what the
+retry-with-backoff is for and why a failed extraction fails the run instead of
+falling back to a fixture unless `EXTRACTION_MODE=auto` says to.

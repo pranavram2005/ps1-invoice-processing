@@ -1,7 +1,12 @@
-"""Stage 2: one Claude call turns a PDF into schema-guaranteed JSON.
+"""Stage 2: one model call turns a PDF into schema-guaranteed JSON.
 
 This is the only place in the pipeline that talks to a model, and the only
-fuzzy step in the system. Three decisions are worth reading the rationale for
+fuzzy step in the system. Two providers fill the same seam - Gemini (default,
+in `gemini.py`) and Anthropic (below) - selected by `EXTRACTION_PROVIDER`.
+Both are handed the same schema and prompts and both return the same tuple, so
+nothing downstream of stage 2 knows which one ran.
+
+Three decisions are worth reading the rationale for
 (all expanded in DECISIONS.md):
 
 1. **Native PDF input.** The file goes to the API as a base64 `document`
@@ -41,11 +46,13 @@ from tenacity import (
     wait_exponential,
 )
 
+from . import gemini
 from .config import (
     ANTHROPIC_API_KEY,
     EXTRACTION_EFFORT,
     EXTRACTION_MODE,
     EXTRACTION_MODEL,
+    EXTRACTION_PROVIDER,
     FIXTURES_PATH,
 )
 from .models import LineItem, Provenance, RawExtraction
@@ -253,7 +260,7 @@ RETRYABLE = (
     retry=retry_if_exception_type(RETRYABLE),
     reraise=True,
 )
-def _call_model(pdf_b64: str, model: str) -> tuple[dict, int, int, int]:
+def _call_anthropic(pdf_b64: str, model: str) -> tuple[dict, int, int, int]:
     """One request. Returns (parsed json, latency_ms, input_tokens, output_tokens)."""
     t0 = time.perf_counter()
     response = client().messages.create(
@@ -309,6 +316,29 @@ def _call_model(pdf_b64: str, model: str) -> tuple[dict, int, int, int]:
         latency_ms,
         int(getattr(usage, "input_tokens", 0) or 0),
         int(getattr(usage, "output_tokens", 0) or 0),
+    )
+
+
+def _call_model(pdf_b64: str, model: str, provider: str) -> tuple[dict, int, int, int]:
+    """Dispatch one extraction to the configured provider.
+
+    Both providers are handed the same schema and the same two prompts, and both
+    return the same four-tuple. That is the whole provider seam - nothing below
+    this line knows or cares which model read the PDF, which is what makes the
+    rule engine's determinism claim independent of the extraction vendor.
+    """
+    if provider == "anthropic":
+        return _call_anthropic(pdf_b64, model)
+    if provider == "gemini":
+        return gemini.call(
+            pdf_b64,
+            model,
+            schema=INVOICE_SCHEMA,
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=USER_PROMPT,
+        )
+    raise ExtractionError(
+        f"Unknown EXTRACTION_PROVIDER {provider!r} - expected 'gemini' or 'anthropic'."
     )
 
 
@@ -419,11 +449,12 @@ def _extract_from_fixture(pdf_bytes: bytes) -> tuple[RawExtraction, dict]:
         raise ExtractionError(
             "Offline mode has no fixture for this file. Offline runs only cover the nine "
             "bundled sample invoices; to process an arbitrary PDF set EXTRACTION_MODE=live "
-            "and supply a funded ANTHROPIC_API_KEY."
+            "and supply a funded key for whichever EXTRACTION_PROVIDER is configured."
         )
     data = fixture["extraction"]
     return parse_payload(data), {
         "model": "offline-fixture",
+        "provider": "fixture",
         "effort": "n/a",
         "latency_ms": 0,
         "input_tokens": 0,
@@ -435,7 +466,11 @@ def _extract_from_fixture(pdf_bytes: bytes) -> tuple[RawExtraction, dict]:
 
 
 def extract(
-    pdf_bytes: bytes, *, model: str | None = None, mode: str | None = None,
+    pdf_bytes: bytes,
+    *,
+    model: str | None = None,
+    mode: str | None = None,
+    provider: str | None = None,
 ) -> tuple[RawExtraction, dict]:
     """Extract one invoice. Returns the extraction plus a telemetry dict.
 
@@ -444,13 +479,14 @@ def extract(
     """
     model = model or EXTRACTION_MODEL
     mode = (mode or EXTRACTION_MODE).lower()
+    provider = (provider or EXTRACTION_PROVIDER).lower()
 
     if mode == "offline":
         return _extract_from_fixture(pdf_bytes)
 
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
     try:
-        data, latency_ms, in_tok, out_tok = _call_model(pdf_b64, model)
+        data, latency_ms, in_tok, out_tok = _call_model(pdf_b64, model, provider)
     except Exception as exc:
         if mode == "auto":
             log.warning("live extraction failed (%s) - falling back to fixture", exc)
@@ -464,7 +500,8 @@ def extract(
     # so hand it to the caller separately for normalisation.
     return extraction, {
         "model": model,
-        "effort": EXTRACTION_EFFORT,
+        "provider": provider,
+        "effort": EXTRACTION_EFFORT if provider == "anthropic" else "n/a",
         "latency_ms": latency_ms,
         "input_tokens": in_tok,
         "output_tokens": out_tok,

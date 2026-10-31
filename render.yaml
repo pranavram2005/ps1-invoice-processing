@@ -6,12 +6,19 @@ services:
     autoDeploy: true
     healthCheckPath: /api/health
     envVars:
-      # Set this in the Render dashboard; it is deliberately not synced from
-      # this file so the key never lands in the repository.
+      - key: EXTRACTION_PROVIDER
+        value: gemini
+      # Set the key in the Render dashboard; it is deliberately not synced from
+      # this file so it never lands in the repository.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Only read when EXTRACTION_PROVIDER=anthropic.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # A flash model, because the Gemini free tier refuses the `*-pro` models
+      # outright (429, `limit: 0`). Raise it on a billed key.
       - key: EXTRACTION_MODEL
-        value: claude-opus-5
+        value: gemini-3.5-flash
       - key: EXTRACTION_EFFORT
         value: medium
       # live | offline | auto. `auto` prefers a real API call and falls back to
