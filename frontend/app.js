@@ -311,6 +311,7 @@
     $('#decision').hidden = true;
     $('#run-panes').hidden = true;
     $('#run-detail').hidden = true;
+    $('#ai-summary').hidden = true;
     updateWorking();
     renderTimeline();
     showTab('run');
@@ -791,10 +792,46 @@
     $('#run-result').hidden = !on;
   }
 
-  // Short names for the tracker. The stage rows keep the precise engineering
-  // labels; these are what a reviewer reads while waiting.
+  // Short names for the tracker, plus what each stage is actually doing. The
+  // stage rows keep the precise engineering labels; these are what a reviewer
+  // reads while waiting, and they are the difference between a progress bar
+  // and understanding what the system is busy with.
   const PHASES = [
-    'Read file', 'Extract', 'Verify', 'Vendor', 'Match PO', 'Check rules', 'Decide',
+    {
+      name: 'Read file',
+      doing: 'Opening the PDF, fingerprinting it, and checking whether it has real text or is a scan.',
+      done: 'Opened the file and checked whether it has a text layer.',
+    },
+    {
+      name: 'Extract',
+      doing: 'A model is reading the page and pulling out the vendor, dates, amounts and PO reference.',
+      done: 'Read the fields off the page.',
+    },
+    {
+      name: 'Verify',
+      doing: 'Checking each extracted figure against the text actually printed in the document.',
+      done: 'Checked every figure against the document itself.',
+    },
+    {
+      name: 'Vendor',
+      doing: 'Looking the supplier up on the approved vendor list.',
+      done: 'Looked the supplier up on the approved list.',
+    },
+    {
+      name: 'Match PO',
+      doing: 'Scoring every plausible purchase order to find which one this bills against.',
+      done: 'Found the purchase order this bills against.',
+    },
+    {
+      name: 'Check rules',
+      doing: 'Running all nine checks - totals, tolerances, duplicates, dates, confidence.',
+      done: 'Ran all nine checks.',
+    },
+    {
+      name: 'Decide',
+      doing: 'Combining the results: the most serious failure sets the outcome.',
+      done: 'Reached a decision.',
+    },
   ];
 
   /** The phase tracker.
@@ -809,20 +846,144 @@
     const node = $('#tracker');
     if (!node) return;
     const bySeq = new Map(state.stages.map((s) => [s.seq, s]));
-    node.innerHTML = PHASES.map((name, i) => {
+    node.innerHTML = PHASES.map((phase, i) => {
       const stage = bySeq.get(i + 1);
       const status = stage ? stage.status : 'pending';
       const mark = status === 'done' ? '✓'
         : status === 'failed' ? '✕'
         : status === 'skipped' ? '–'
         : status === 'running' ? '' : i + 1;
-      return `<li class="ph is-${esc(status)}">
+      return `<li class="ph is-${esc(status)}" title="${esc(phase.doing)}">
         <span class="ph-dot">${mark}</span>
-        <span class="ph-name">${esc(name)}</span>
+        <span class="ph-name">${esc(phase.name)}</span>
       </li>`;
     }).join('');
-    const done = state.stages.filter((s) => ['done', 'failed', 'skipped'].includes(s.status)).length;
-    node.style.setProperty('--progress', `${Math.round((done / PHASES.length) * 100)}%`);
+
+    // Narrate the live stage. Once everything is terminal this clears, because
+    // the verdict below it is then the thing to read.
+    const now = $('#now-doing');
+    if (now) {
+      const running = state.stages.find((x) => x.status === 'running');
+      if (running && PHASES[running.seq - 1]) {
+        now.hidden = false;
+        now.innerHTML = `<span class="now-dot"></span>${esc(PHASES[running.seq - 1].doing)}`;
+      } else {
+        now.hidden = true;
+      }
+    }
+  }
+
+  /** Turn record identifiers in rule text into links to the record itself.
+   *
+   *  A rule saying "byte-identical to run RUN-20261101-023136-099" is precise
+   *  and useless to act on: the reviewer's next question is always "show me
+   *  that one". PO numbers and run ids are the two things the rules name, and
+   *  both have a record in this app, so both become one click.
+   *
+   *  Escapes first, then substitutes - the input is rule text, but it reaches
+   *  the DOM as HTML and nothing here should ever be exempt from escaping.
+   */
+  function linkify(text) {
+
+    let out = esc(text == null ? '' : String(text));
+    out = out.replace(/(RUN-\d{8}-\d{6}-\d{3})/g,
+      '<a class="reclink" href="#" data-run="$1" title="Open this run">$1</a>');
+    out = out.replace(/(PO-\d+)/g,
+      '<a class="reclink" href="#" data-po="$1" title="Open this purchase order">$1</a>');
+    return out;
+  }
+
+  /** Record links are rendered into innerHTML all over the result view, so bind
+   *  them once at the document level rather than after every render. */
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('.reclink');
+    if (!link) return;
+    event.preventDefault();
+    if (link.dataset.run) loadRun(link.dataset.run);
+    else if (link.dataset.po) showPo(link.dataset.po);
+  });
+
+  /** A purchase order, with what has been billed against it. */
+  async function showPo(poNumber) {
+    try {
+      const po = await api(`/api/pos/${encodeURIComponent(poNumber)}`);
+      const rows = (po.consumption || []).map((c) => `
+        <tr>
+          <td><a class="reclink" href="#" data-run="${esc(c.run_id)}">${esc(c.invoice_number || c.run_id)}</a></td>
+          <td class="num">${money(c.amount, po.currency || 'INR')}</td>
+          <td>${when(c.booked_at)}</td>
+        </tr>`).join('');
+      openSheet(`Purchase order ${esc(po.po_number)}`, `
+        <div class="facts facts-sheet">
+          <div class="fact"><div class="fact-k">Vendor</div><div class="fact-v">${esc(po.vendor_name || '—')}</div></div>
+          <div class="fact"><div class="fact-k">PO value</div><div class="fact-v">${money(po.po_value, 'INR')}</div></div>
+          <div class="fact"><div class="fact-k">Already billed</div><div class="fact-v">${money(po.already_billed, 'INR')}</div></div>
+          <div class="fact"><div class="fact-k">Remaining</div><div class="fact-v">${money(po.remaining, 'INR')}</div></div>
+        </div>
+        ${po.description ? `<p class="sheet-note">${esc(po.description)}</p>` : ''}
+        ${rows ? `<table class="grid sheet-grid"><thead><tr>
+            <th>Billed by</th><th class="num">Amount</th><th>When</th>
+          </tr></thead><tbody>${rows}</tbody></table>`
+          : '<p class="sheet-note">Nothing has been billed against this PO yet.</p>'}`);
+    } catch (err) {
+      toast(`Could not open ${poNumber}: ${err.message}`, true);
+    }
+  }
+
+  /** A light slide-over for a referenced record, so following a link never
+   *  loses the run you were reading. */
+  function openSheet(title, html) {
+    let sheet = $('#sheet');
+    if (!sheet) {
+      sheet = document.createElement('div');
+      sheet.id = 'sheet';
+      sheet.className = 'sheet';
+      sheet.innerHTML = `<div class="sheet-back"></div>
+        <div class="sheet-panel" role="dialog" aria-modal="true">
+          <div class="sheet-head"><h3 id="sheet-title"></h3>
+            <button class="btn btn-ghost btn-sm" id="sheet-close" type="button">Close</button></div>
+          <div class="sheet-body" id="sheet-body"></div>
+        </div>`;
+      document.body.appendChild(sheet);
+      const close = () => { sheet.hidden = true; };
+      $('.sheet-back', sheet).addEventListener('click', close);
+      $('#sheet-close', sheet).addEventListener('click', close);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+      });
+    }
+    $('#sheet-title', sheet).textContent = title.replace(/<[^>]*>/g, '');
+    $('#sheet-body', sheet).innerHTML = html;
+    sheet.hidden = false;
+  }
+
+  /** The model's plain-English read of the problem, fetched after the verdict.
+   *
+   *  Deliberately loaded separately and after the fact: the decision is already
+   *  on screen and correct without it, so a slow or unavailable model delays
+   *  nothing that matters. It is labelled as model-written because it is the
+   *  one piece of prose on this screen that a model produced.
+   */
+  async function loadSummary(run) {
+    const node = $('#ai-summary');
+    if (!node || !run || !run.decision) return;
+    node.hidden = false;
+    node.className = 'aisum is-loading';
+    node.innerHTML = `<div class="ai-badge">AI summary</div>
+      <div class="ai-text"><span class="ai-skel"></span><span class="ai-skel"></span></div>`;
+    try {
+      const out = await api(`/api/runs/${encodeURIComponent(run.run_id)}/explain`, { method: 'POST' });
+      node.className = 'aisum';
+      node.innerHTML = `
+        <div class="ai-badge">${out.source === 'model' ? 'AI summary' : 'Summary'}</div>
+        <p class="ai-text">${esc(out.summary)}</p>
+        <div class="ai-foot">${out.source === 'model'
+          ? `Written by ${esc(out.model || out.provider || 'a model')} from the rule results. The decision above was made by the rules, not by this.`
+          : 'Composed from the rule output - no model was available.'}</div>`;
+    } catch (err) {
+      // An explanation is a convenience; its absence must not read as an error.
+      node.hidden = true;
+    }
   }
 
   /** The document itself, beside what was read off it. */
@@ -894,6 +1055,7 @@
     renderDocView(run);
     $('#run-panes').hidden = false;
     $('#run-detail').hidden = false;
+    loadSummary(run);
   }
 
   /** The four things a person actually wants off an invoice. */
@@ -938,9 +1100,10 @@
         <span class="check-mark">${k === 'pass' ? '✓' : k === 'fail' ? '✕' : '–'}</span>
         <span class="check-body">
           <span class="check-name">${esc(r.title || r.rule_id)}</span>
-          ${r.message ? `<span class="check-detail">${esc(r.message)}</span>` : ''}
+          ${r.message ? `<span class="check-detail">${linkify(r.message)}</span>` : ''}
           ${k === 'fail' && r.expected ? `<span class="check-cmp">
-             <b>expected</b> ${esc(r.expected)} &nbsp;·&nbsp; <b>found</b> ${esc(r.actual || '—')}
+             <span class="cmp-row"><b>Looked for</b> ${linkify(r.expected)}</span>
+             <span class="cmp-row"><b>Found</b> ${linkify(r.actual || '—')}</span>
            </span>` : ''}
         </span>
         <span class="check-id">${esc(r.rule_id)}</span>
@@ -949,13 +1112,19 @@
 
     node.innerHTML = `
       <div class="checks-head">
-        <h3>What was checked</h3>
-        <span class="checks-count">${passed.length} of ${rules.length - skipped.length} passed</span>
+        <h3>${failed.length ? 'What went wrong' : 'What was checked'}</h3>
+        <span class="checks-count">${passed.length} of ${rules.length - skipped.length} checks passed</span>
       </div>
-      ${failed.length ? `<ul class="check-list">${failed.map(row).join('')}</ul>` : ''}
+      ${failed.length ? `
+        <p class="checks-lead">${esc(
+          failed.length === 1
+            ? 'One check did not pass. Here is what it looked for and what it found instead.'
+            : `${failed.length} checks did not pass. Each one shows what it looked for and what it found instead.`
+        )}</p>
+        <ul class="check-list">${failed.map(row).join('')}</ul>` : ''}
       ${passed.length || skipped.length ? `
         <details class="checks-rest">
-          <summary>${failed.length ? 'Show the checks that passed' : 'Show all nine checks'}</summary>
+          <summary>${failed.length ? `Show the ${passed.length} checks that passed` : 'Show every check'}</summary>
           <ul class="check-list">${passed.concat(skipped).map(row).join('')}</ul>
         </details>` : ''}`;
   }

@@ -81,8 +81,14 @@
            not bytes, so a slow stage never reads as a stall. -->
       <ol class="tracker" id="tracker" aria-label="Processing stages"></ol>
 
+      <!-- What the live stage is actually doing, in a sentence. -->
+      <p class="now" id="now-doing" hidden></p>
+
       <!-- the answer -->
       <div class="verdict" id="decision" hidden></div>
+
+      <!-- the model's plain-English read of the problem -->
+      <div class="aisum" id="ai-summary" hidden></div>
 
       <!-- The document beside what was read off it - the pattern every serious
            document-processing tool converges on. -->

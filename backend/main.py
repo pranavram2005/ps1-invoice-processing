@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import config as config_mod, db, pipeline, rules, seed, state
+from . import config as config_mod, db, explain, pipeline, rules, seed, state
 from .config import (
     EXTRACTION_EFFORT,
     EXTRACTION_MODE,
@@ -48,6 +48,10 @@ app.add_middleware(
 # Hold references to in-flight pipeline tasks so they are not garbage collected
 # mid-run (asyncio only keeps weak references to tasks).
 _tasks: set[asyncio.Task] = set()
+
+# Summaries are deterministic for a finished run, so generate each one once.
+# Keeps a reviewer clicking between tabs from re-billing the same tokens.
+explain_cache: dict[str, dict] = {}
 
 
 @app.on_event("startup")
@@ -288,6 +292,37 @@ def delete_run(run_id: str) -> dict:
     if not db.delete_run(run_id):
         raise HTTPException(404, f"run {run_id} not found")
     return {"ok": True, "run_id": run_id}
+
+
+@app.post("/api/runs/{run_id}/explain")
+async def explain_run(run_id: str) -> dict:
+    """A short plain-English summary of what is wrong with a flagged invoice.
+
+    This is the one place a model is asked to *describe* rather than extract -
+    and it still decides nothing. The verdict and the failing rules are already
+    fixed by the time this runs; the model is given them and asked to say what
+    they mean in two sentences for someone who does not want to read nine rule
+    rows. If it is unavailable the UI falls back to the deterministic summary,
+    because an explanation is a convenience and the decision is not.
+    """
+    run = db.get_run(run_id)
+    if run is None:
+        raise HTTPException(404, f"run {run_id} not found")
+    if run.decision is None:
+        raise HTTPException(409, "This run has not reached a decision yet.")
+
+    cached = explain_cache.get(run_id)
+    if cached:
+        return cached
+
+    try:
+        summary = await asyncio.to_thread(explain.summarise, run)
+    except Exception as exc:
+        log.warning("explain failed for %s: %s", run_id, exc)
+        raise HTTPException(503, f"Could not generate a summary: {exc}") from exc
+
+    explain_cache[run_id] = summary
+    return summary
 
 
 @app.get("/api/runs/{run_id}/file")
