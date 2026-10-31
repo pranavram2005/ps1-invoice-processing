@@ -39,7 +39,7 @@ from datetime import date, datetime
 from typing import AsyncIterator
 
 from . import db, extract as extract_mod, matching, normalize as normalize_mod, provenance as prov
-from .config import STAGE_DELAY_MS, UPLOAD_DIR
+from .config import STAGE_DELAY_MS, UPLOAD_DIR, active_model
 from .events import broker
 from .models import (
     ConfidenceBreakdown,
@@ -48,7 +48,7 @@ from .models import (
     POMatch,
     RawExtraction,
     RunResult,
-    STAGES,
+    stages,
     StageRecord,
     VendorMatch,
 )
@@ -96,7 +96,7 @@ class PipelineRun:
         self.replay = replay
         self.stages = [
             StageRecord(seq=i + 1, stage=stage, label=label)
-            for i, (stage, label) in enumerate(STAGES)
+            for i, (stage, label) in enumerate(stages())
         ]
         self.result = RunResult(
             run_id=run_id,
@@ -268,7 +268,7 @@ class PipelineRun:
                 self.result.extraction_origin = cached.get("origin") or "live"
                 self._model_iso = None
                 db.record_llm_event(
-                    run_id=self.run_id, model=extract_mod.EXTRACTION_MODEL,
+                    run_id=self.run_id, model=active_model(),
                     latency_ms=0, input_tokens=0, output_tokens=0, cached=True,
                 )
                 record.summary = (

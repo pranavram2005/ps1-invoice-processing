@@ -46,14 +46,15 @@ from tenacity import (
     wait_exponential,
 )
 
-from . import gemini
+from . import gemini, groq
 from .config import (
     ANTHROPIC_API_KEY,
     EXTRACTION_EFFORT,
     EXTRACTION_MODE,
-    EXTRACTION_MODEL,
-    EXTRACTION_PROVIDER,
     FIXTURES_PATH,
+    active_model,
+    active_provider,
+    model_for,
 )
 from .models import LineItem, Provenance, RawExtraction
 
@@ -319,7 +320,9 @@ def _call_anthropic(pdf_b64: str, model: str) -> tuple[dict, int, int, int]:
     )
 
 
-def _call_model(pdf_b64: str, model: str, provider: str) -> tuple[dict, int, int, int]:
+def _call_model(
+    pdf_b64: str, model: str, provider: str, pdf_bytes: bytes | None = None,
+) -> tuple[dict, int, int, int]:
     """Dispatch one extraction to the configured provider.
 
     Both providers are handed the same schema and the same two prompts, and both
@@ -337,8 +340,21 @@ def _call_model(pdf_b64: str, model: str, provider: str) -> tuple[dict, int, int
             system_prompt=SYSTEM_PROMPT,
             user_prompt=USER_PROMPT,
         )
+    if provider == "groq":
+        # Groq serves text-only models, so this one reads the PDF's text layer
+        # rather than the file. It is handed the bytes to avoid a pointless
+        # base64 round trip.
+        return groq.call(
+            pdf_b64,
+            model,
+            schema=INVOICE_SCHEMA,
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=USER_PROMPT,
+            pdf_bytes=pdf_bytes,
+        )
     raise ExtractionError(
-        f"Unknown EXTRACTION_PROVIDER {provider!r} - expected 'gemini' or 'anthropic'."
+        f"Unknown extraction provider {provider!r} - expected one of "
+        f"gemini, groq, anthropic."
     )
 
 
@@ -477,16 +493,19 @@ def extract(
     `telemetry["source"]` is either "live" or "fixture" and is surfaced in the
     run view, so an offline run is never mistaken for a real one.
     """
-    model = model or EXTRACTION_MODEL
     mode = (mode or EXTRACTION_MODE).lower()
-    provider = (provider or EXTRACTION_PROVIDER).lower()
+    provider = (provider or active_provider()).lower()
+    # Resolve the model against the provider actually being used, not the one
+    # that happens to be active - otherwise an explicit provider= override gets
+    # the wrong provider's model name.
+    model = model or model_for(provider)
 
     if mode == "offline":
         return _extract_from_fixture(pdf_bytes)
 
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
     try:
-        data, latency_ms, in_tok, out_tok = _call_model(pdf_b64, model, provider)
+        data, latency_ms, in_tok, out_tok = _call_model(pdf_b64, model, provider, pdf_bytes)
     except Exception as exc:
         if mode == "auto":
             log.warning("live extraction failed (%s) - falling back to fixture", exc)

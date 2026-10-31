@@ -17,8 +17,11 @@
       <p class="tagline">The model extracts. The code decides.</p>
     </div>
   </div>
-  <div class="topbar-right" id="env-strip">
-    <span class="env-item"><span class="dot dot-idle" id="health-dot"></span><span id="health-text">connecting…</span></span>
+  <div class="topbar-right">
+    <div class="provider" id="provider-switch" role="group" aria-label="Extraction provider"></div>
+    <div id="env-strip">
+      <span class="env-item"><span class="dot dot-idle" id="health-dot"></span><span id="health-text">connecting…</span></span>
+    </div>
   </div>
 </header>
 
@@ -33,45 +36,77 @@
   <!-- ==================================================== RUN ============ -->
   <section class="panel is-active" id="panel-run">
 
-    <div class="run-intake">
+    <!-- State 1: nothing running. One obvious action. -->
+    <div class="intake" id="run-intake">
+      <h2 class="intake-h">Check an invoice</h2>
+      <p class="intake-sub">Drop in a vendor PDF. You get back approve, flag or reject -
+         and the reason behind it.</p>
+
       <div class="dropzone" id="dropzone" tabindex="0" role="button"
            aria-label="Drop an invoice PDF here or click to choose a file">
-        <div class="dz-icon">📄</div>
-        <div class="dz-title">Drop an invoice PDF here</div>
+        <svg class="dz-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="dz-title">Drop a PDF here</div>
         <div class="dz-sub">or <button class="linkish" id="browse-btn" type="button">choose a file</button></div>
         <input type="file" id="file-input" accept="application/pdf" hidden>
       </div>
 
-      <div class="samples">
-        <div class="samples-head">
-          <h2>Or run a bundled scenario</h2>
-          <p class="hint">Each one is engineered to take a different path through the rules.
-             Run them top to bottom - the duplicate case needs its original processed first.</p>
+      <div class="try">
+        <label class="try-label" for="sample-select">No invoice handy? Try a prepared one</label>
+        <div class="try-row">
+          <select id="sample-select" class="select"></select>
+          <button class="btn btn-primary" id="sample-run" type="button">Run it</button>
         </div>
-        <div class="sample-list" id="sample-list"></div>
+        <p class="try-why" id="sample-why"></p>
       </div>
     </div>
 
-    <div class="run-empty" id="run-empty">
-      <p>No run yet. Drop a PDF or pick a scenario above to watch the seven stages execute.</p>
-    </div>
+    <!-- State 2: a run is in flight or finished. The verdict is the hero. -->
+    <div class="result" id="run-result" hidden>
 
-    <div class="run-live" id="run-live" hidden>
-      <div class="run-head">
-        <div>
-          <h2 id="run-filename">—</h2>
-          <div class="run-meta" id="run-meta"></div>
-        </div>
-        <div class="run-actions">
-          <button class="btn btn-ghost" id="expand-btn" type="button">Expand all</button>
+      <div class="result-bar">
+        <button class="btn btn-ghost" id="back-btn" type="button">&larr; Check another</button>
+        <div class="result-file" id="run-filename">—</div>
+        <div class="result-actions">
           <button class="btn btn-ghost" id="view-pdf-btn" type="button">View PDF</button>
           <button class="btn btn-ghost" id="replay-btn" type="button">Re-run</button>
         </div>
       </div>
 
-      <div class="timeline" id="timeline"></div>
+      <!-- while the pipeline is still executing -->
+      <div class="working" id="run-working">
+        <div class="working-spin" aria-hidden="true"></div>
+        <div class="working-text">
+          <strong id="working-stage">Reading the document…</strong>
+          <span id="working-step">step 1 of 7</span>
+        </div>
+        <div class="working-bar"><i id="working-fill"></i></div>
+      </div>
 
-      <div class="decision" id="decision" hidden></div>
+      <!-- the answer -->
+      <div class="verdict" id="decision" hidden></div>
+
+      <div class="facts" id="run-facts" hidden></div>
+
+      <div class="checks" id="run-checks" hidden></div>
+
+      <!-- graded detail, one click away rather than in the way -->
+      <details class="detail" id="run-detail" hidden>
+        <summary>
+          <span>How this was processed</span>
+          <span class="detail-note">all seven stages, with what each one produced</span>
+        </summary>
+        <div class="detail-body">
+          <div class="detail-bar">
+            <div class="run-meta" id="run-meta"></div>
+            <button class="btn btn-ghost btn-sm" id="expand-btn" type="button">Expand all</button>
+          </div>
+          <div class="timeline" id="timeline"></div>
+        </div>
+      </details>
     </div>
   </section>
 

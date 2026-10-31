@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .config import EXTRACTION_PROVIDER
+from .config import active_provider
 
 # `model_confidence` is the model's own confidence, not pydantic model config.
 # Pydantic reserves the `model_` prefix and warns about it; the field name is
@@ -30,17 +30,30 @@ Severity = Literal["PASS", "FLAG", "REJECT"]
 PdfKind = Literal["text", "scanned"]
 StageStatus = Literal["pending", "running", "done", "failed", "skipped"]
 
-# Stage 2's label names the configured provider rather than hardcoding one.
-# Which model read the PDF is exactly the kind of thing a reviewer should be
-# able to read off the timeline, and the provider is now a config choice.
-_EXTRACT_LABEL = {
-    "gemini": "Extract fields (Gemini)",
-    "anthropic": "Extract fields (Claude)",
-}.get(EXTRACTION_PROVIDER, "Extract fields (LLM)")
+# Stage 2's label names whichever provider is live. The provider can now be
+# switched at runtime, so this is resolved per run rather than frozen at import:
+# which model read the PDF is exactly the kind of thing a reviewer should be
+# able to read straight off the timeline.
+PROVIDER_LABELS = {
+    "gemini": "Gemini",
+    "groq": "Groq",
+    "anthropic": "Claude",
+}
+
+
+def extract_stage_label() -> str:
+    return f"Extract fields ({PROVIDER_LABELS.get(active_provider(), 'LLM')})"
+
+
+def stages() -> list[tuple[str, str]]:
+    """The seven stages, with stage 2 named for the live provider."""
+    return [(key, extract_stage_label() if key == "EXTRACT" else label)
+            for key, label in STAGES]
+
 
 STAGES: list[tuple[str, str]] = [
     ("INTAKE", "Intake & fingerprint"),
-    ("EXTRACT", _EXTRACT_LABEL),
+    ("EXTRACT", "Extract fields"),
     ("NORMALIZE", "Normalise & verify provenance"),
     ("RESOLVE_VENDOR", "Resolve vendor"),
     ("MATCH_PO", "Match purchase order"),

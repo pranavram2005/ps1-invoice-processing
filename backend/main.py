@@ -12,23 +12,25 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from . import db, pipeline, rules, seed, state
+from . import config as config_mod, db, pipeline, rules, seed, state
 from .config import (
     EXTRACTION_EFFORT,
     EXTRACTION_MODE,
-    EXTRACTION_MODEL,
     FRONTEND_DIR,
+    PROVIDERS,
     SAMPLE_INVOICE_DIR,
     STAGE_DELAY_MS,
-    ANTHROPIC_API_KEY,
+    active_model,
+    active_provider,
+    provider_key_present,
 )
 from .events import broker
-from .models import RunResult, RunSummary
+from .models import PROVIDER_LABELS, RunResult, RunSummary
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s"
@@ -55,7 +57,7 @@ def _startup() -> None:
     state.load_from_db()
     log.info(
         "ready - %d vendors, %d POs, %d runs, model=%s",
-        len(db.list_vendors()), len(db.list_pos()), db.count_runs(), EXTRACTION_MODEL,
+        len(db.list_vendors()), len(db.list_pos()), db.count_runs(), active_model(),
     )
 
 
@@ -63,14 +65,62 @@ def _startup() -> None:
 # Health / meta
 # --------------------------------------------------------------------------- #
 
+def _provider_options() -> list[dict]:
+    """Every provider the UI can offer, and whether it is usable right now.
+
+    A provider with no key is listed but disabled rather than hidden: the point
+    of the control is to show the seam exists, and silently dropping an option
+    would just raise the question of where it went.
+    """
+    return [
+        {
+            "id": name,
+            "label": PROVIDER_LABELS.get(name, name),
+            "available": provider_key_present(name),
+            "active": name == active_provider(),
+            # Groq serves text-only models, so a scanned PDF has nothing for it
+            # to read. The UI says so before someone picks it and is surprised.
+            "reads_images": name != "groq",
+        }
+        for name in PROVIDERS
+    ]
+
+
+@app.post("/api/provider")
+def set_provider(payload: dict = Body(...)) -> dict:
+    """Switch which model provider stage 2 calls.
+
+    Process-local and not persisted: this is a demo control that makes the
+    provider seam visible, not a deployment setting. Runs already in the
+    database keep whatever read them - the switch applies to the next run, and
+    each run's stage 2 records the model that actually ran.
+    """
+    name = str(payload.get("provider", "")).strip().lower()
+    try:
+        active = config_mod.set_active_provider(name)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not provider_key_present(active):
+        log.warning("switched to %s, which has no API key configured", active)
+    log.info("extraction provider switched to %s (%s)", active, active_model())
+    return {
+        "provider": active,
+        "model": active_model(),
+        "providers": _provider_options(),
+        "key_present": provider_key_present(active),
+    }
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
         "ok": True,
-        "model": EXTRACTION_MODEL,
+        "model": active_model(),
+        "provider": active_provider(),
+        "providers": _provider_options(),
         "effort": EXTRACTION_EFFORT,
         "extraction_mode": EXTRACTION_MODE,
-        "api_key_present": bool(ANTHROPIC_API_KEY),
+        "api_key_present": provider_key_present(active_provider()),
         "runs": db.count_runs(),
         "vendors": len(db.list_vendors()),
         "purchase_orders": len(db.list_pos()),
@@ -345,7 +395,7 @@ def stats() -> dict:
 def telemetry() -> dict:
     return {
         **db.telemetry_summary(),
-        "model": EXTRACTION_MODEL,
+        "model": active_model(),
         "effort": EXTRACTION_EFFORT,
         "stage_delay_ms": STAGE_DELAY_MS,
         "stage_delay_note": (

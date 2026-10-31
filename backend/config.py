@@ -39,6 +39,13 @@ GEMINI_PROJECT = os.getenv("GEMINI_PROJECT", "").strip()
 _thinking = os.getenv("GEMINI_THINKING_BUDGET", "").strip()
 GEMINI_THINKING_BUDGET: int | None = int(_thinking) if _thinking else None
 
+# Groq. OpenAI-compatible endpoint; the models it serves are text-only, so that
+# provider reads the PDF's text layer rather than the file. See `groq.py`.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_API_BASE = os.getenv(
+    "GROQ_API_BASE", "https://api.groq.com/openai/v1"
+).strip().rstrip("/")
+
 # Per-provider defaults, so switching provider does not also require remembering
 # to change the model name.
 #
@@ -51,6 +58,9 @@ GEMINI_THINKING_BUDGET: int | None = int(_thinking) if _thinking else None
 _DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
     "gemini": "gemini-3.5-flash",
+    # gpt-oss-120b is the strongest instruction-follower Groq serves that also
+    # honours a strict json_schema, which this extraction depends on.
+    "groq": "openai/gpt-oss-120b",
 }
 EXTRACTION_MODEL = (
     os.getenv("EXTRACTION_MODEL", "").strip()
@@ -123,11 +133,77 @@ MODEL_PRICING_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "gemini-2.5-flash-lite": (0.10, 0.40),
     "gemini-3.5-flash": (0.30, 2.50),          # unconfirmed
     "gemini-3.1-pro-preview": (1.25, 10.00),   # unconfirmed
+    # Groq list prices.
+    "openai/gpt-oss-120b": (0.15, 0.75),
+    "openai/gpt-oss-20b": (0.10, 0.50),
+    "qwen/qwen3.8-27b": (0.15, 0.75),          # unconfirmed
 }
 
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLE_INVOICE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# --------------------------------------------------------------------------- #
+# The live provider choice
+#
+# EXTRACTION_PROVIDER above is the *startup* value. The UI can switch provider
+# at runtime, so the current choice lives here rather than in a module constant
+# that callers would capture at import time and never see change. Everything
+# that dispatches a model call reads `active_provider()`.
+#
+# This is process-local and deliberately not persisted: it is a demo control
+# for showing that the provider is a detail, not a deployment setting. A
+# restart returns to whatever the environment says.
+# --------------------------------------------------------------------------- #
+
+PROVIDERS = ("gemini", "groq", "anthropic")
+
+_active_provider = EXTRACTION_PROVIDER if EXTRACTION_PROVIDER in PROVIDERS else "gemini"
+
+
+def active_provider() -> str:
+    return _active_provider
+
+
+def model_for(provider: str) -> str:
+    """The model to use for a given provider.
+
+    An explicit EXTRACTION_MODEL pins the model only for the provider it
+    actually belongs to. Without that check, switching provider would carry the
+    previous provider's model name across and produce a confusing 404 from an
+    API that has never heard of it.
+    """
+    pinned = os.getenv("EXTRACTION_MODEL", "").strip()
+    if pinned:
+        prefix = {"anthropic": "claude", "gemini": "gemini"}.get(provider)
+        # Groq model ids are vendor-prefixed (openai/..., qwen/...), so there is
+        # no single prefix to test; accept any pin for it.
+        if prefix is None or pinned.startswith(prefix):
+            return pinned
+    return _DEFAULT_MODELS.get(provider, "gemini-3.5-flash")
+
+
+def active_model() -> str:
+    """The model for whichever provider is live."""
+    return model_for(_active_provider)
+
+
+def set_active_provider(name: str) -> str:
+    global _active_provider
+    name = (name or "").strip().lower()
+    if name not in PROVIDERS:
+        raise ValueError(f"unknown provider {name!r} - expected one of {', '.join(PROVIDERS)}")
+    _active_provider = name
+    return _active_provider
+
+
+def provider_key_present(name: str) -> bool:
+    return bool({
+        "gemini": GEMINI_API_KEY,
+        "groq": GROQ_API_KEY,
+        "anthropic": ANTHROPIC_API_KEY,
+    }.get(name, ""))
 
 
 def price_for(model: str) -> tuple[float, float]:

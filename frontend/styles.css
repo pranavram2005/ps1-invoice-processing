@@ -477,3 +477,444 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
+
+/* ==========================================================================
+   Run tab, rebuilt around one question: pay this or not?
+
+   The previous layout gave most of the first screen to a list of fourteen
+   bundled scenarios - a developer's test menu - while the actual task (drop a
+   PDF) sat in a small box beside it and the answer appeared in a strip below
+   the fold. Same features, inverted hierarchy: the intake is the whole screen
+   until there is a run, then the verdict is the whole screen, with the
+   seven-stage detail one disclosure away.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- intake --- */
+
+.intake {
+  max-width: 560px;
+  margin: 72px auto 96px;
+  text-align: center;
+}
+
+.intake-h {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+}
+
+.intake-sub {
+  color: var(--ink-3);
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 0 0 32px;
+}
+
+.dropzone {
+  background: var(--surface);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 14px;
+  padding: 52px 24px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+
+.dropzone:hover,
+.dropzone:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.dropzone.is-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.01);
+}
+
+.dz-icon {
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+  margin: 0 auto 14px;
+  display: block;
+}
+
+.dz-title { font-size: 17px; font-weight: 600; }
+.dz-sub   { font-size: 14px; color: var(--ink-3); margin-top: 5px; }
+
+/* The scenario picker: one control, not fourteen rows. */
+.try { margin-top: 30px; }
+
+.try-label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-bottom: 9px;
+}
+
+.try-row { display: flex; gap: 8px; }
+
+.select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+.select:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.try-why {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  text-align: left;
+  margin: 11px 2px 0;
+  min-height: 2.6em;
+}
+
+/* ---------------------------------------------------------------- result --- */
+
+.result { max-width: 840px; margin: 28px auto 80px; }
+
+.result-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.result-file {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-actions { display: flex; gap: 7px; }
+
+.btn-sm { font-size: 12px; padding: 5px 10px; }
+
+/* ----- in-flight -----------------------------------------------------------
+   Seven stage rows are the audit trail, not a progress indicator. While the
+   run executes this says, in one line, what is happening. */
+
+.working {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 26px 24px 22px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 15px;
+  align-items: center;
+}
+
+.working-spin {
+  width: 21px;
+  height: 21px;
+  border: 2.5px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.working-text { display: flex; flex-direction: column; gap: 3px; }
+.working-text strong { font-size: 15px; font-weight: 600; }
+.working-text span   { font-size: 12.5px; color: var(--ink-4); }
+
+.working-bar {
+  grid-column: 1 / -1;
+  margin-top: 18px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.working-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width .35s ease;
+}
+
+/* ----- the answer ---------------------------------------------------------- */
+
+.verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 26px 26px 24px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.verdict.is-approve { border-left-color: var(--approve); background: var(--approve-bg); }
+.verdict.is-flag    { border-left-color: var(--flag);    background: var(--flag-bg); }
+.verdict.is-reject  { border-left-color: var(--reject);  background: var(--reject-bg); }
+
+.v-mark {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.is-approve .v-mark { background: var(--approve); }
+.is-flag    .v-mark { background: var(--flag); }
+.is-reject  .v-mark { background: var(--reject); }
+
+.v-text { flex: 1; min-width: 0; }
+
+.v-word {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.is-approve .v-word { color: var(--approve); }
+.is-flag    .v-word { color: var(--flag); }
+.is-reject  .v-word { color: var(--reject); }
+
+.v-line {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  margin-bottom: 7px;
+}
+
+.v-sub { font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }
+
+.v-tag {
+  flex: none;
+  align-self: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--flag);
+  background: var(--surface);
+  border: 1px solid var(--flag-br);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+/* ----- the four facts ------------------------------------------------------ */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.fact { background: var(--surface); padding: 15px 17px; min-width: 0; }
+
+.fact-k {
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 5px;
+}
+
+.fact-v {
+  font-size: 14.5px;
+  font-weight: 550;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* ----- the checks ---------------------------------------------------------- */
+
+.checks {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 19px 21px;
+  margin-top: 16px;
+}
+
+.checks-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+
+.checks-head h3 { font-size: 15px; margin: 0; }
+.checks-count   { font-size: 12.5px; color: var(--ink-4); }
+
+.check-list { list-style: none; margin: 0; padding: 0; }
+
+.check {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.check-list > .check:first-child { border-top: none; }
+
+.check-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.check.is-pass .check-mark { background: var(--approve); }
+.check.is-fail .check-mark { background: var(--reject); }
+.check.is-skip .check-mark { background: var(--ink-4); }
+
+.check-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.check-name { font-size: 14px; font-weight: 550; }
+
+.check-detail,
+.check-cmp { font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+
+.check-cmp b {
+  font-weight: 600;
+  color: var(--ink-4);
+  font-size: 11px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.check-id {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-4);
+  padding-top: 2px;
+}
+
+.checks-rest { margin-top: 4px; }
+
+.checks-rest > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent);
+  padding: 9px 0 3px;
+  list-style: none;
+}
+
+.checks-rest > summary::-webkit-details-marker { display: none; }
+.checks-rest > summary::before { content: '> '; }
+.checks-rest[open] > summary::before { content: 'v '; }
+
+/* ----- the graded detail, available but not in the way --------------------- */
+
+.detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+}
+
+.detail > summary {
+  cursor: pointer;
+  padding: 15px 21px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.detail > summary::-webkit-details-marker { display: none; }
+.detail > summary::before { content: '>'; color: var(--ink-4); }
+.detail[open] > summary::before { content: 'v'; }
+
+.detail-note { font-size: 12.5px; font-weight: 400; color: var(--ink-4); }
+
+.detail-body { padding: 4px 21px 20px; border-top: 1px solid var(--border); }
+
+.detail-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 0 6px;
+}
+
+/* ----- provider switch, in the top strip ----------------------------------- */
+
+.provider {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.provider button {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+
+.provider button:hover:not(.is-on) { color: var(--ink); }
+
+.provider button.is-on {
+  background: var(--surface);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 2px rgba(16, 20, 26, .08);
+}
+
+.provider button:disabled { opacity: .45; cursor: not-allowed; }
+
+@media (max-width: 720px) {
+  .facts { grid-template-columns: repeat(2, 1fr); }
+  .intake { margin: 44px auto 60px; }
+  .v-line { font-size: 18px; }
+}
+
+/* The `hidden` attribute sets display:none at the lowest precedence, so any
+   component with its own display rule (.working is grid, .facts is grid,
+   .verdict is flex) silently ignores it. This is the fix every such codebase
+   eventually needs. */
+[hidden] { display: none !important; }

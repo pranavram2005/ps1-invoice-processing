@@ -177,8 +177,54 @@
       }
       strip.innerHTML = parts.join('');
       bindTooltips(strip);
+      renderProviderSwitch(health);
     } catch (err) {
       strip.innerHTML = `<span class="env-item is-warn"><span class="dot dot-bad"></span>API unreachable</span>`;
+    }
+  }
+
+  // ---------------------------------------------------------------- provider
+
+  /** The provider switch.
+   *
+   *  This control earns its place: the whole design claim is that the model
+   *  only extracts and the code decides, which implies the model is swappable.
+   *  Being able to change it mid-demo and watch the same invoice reach the same
+   *  verdict is the shortest possible proof of that.
+   */
+  function renderProviderSwitch(health) {
+    const node = $('#provider-switch');
+    if (!node || !health || !health.providers) return;
+
+    node.innerHTML = health.providers.map((p) => {
+      const tip = !p.available
+        ? `<div class="tt-head">${esc(p.label)} has no API key</div>Add its key to .env and restart.`
+        : !p.reads_images
+          ? `<div class="tt-head">${esc(p.label)} reads text, not images</div>`
+            + 'Its models are text-only, so this provider reads the PDF text layer. '
+            + 'The scanned sample has no text layer and will fail on it by design.'
+          : `<div class="tt-head">${esc(p.label)}</div>Reads the page itself, so scanned PDFs work.`;
+      return `<button type="button" data-provider="${esc(p.id)}"
+                class="${p.active ? 'is-on' : ''}" ${p.available ? '' : 'disabled'}
+                data-tip="${esc(tip)}">${esc(p.label)}</button>`;
+    }).join('');
+
+    $$('button[data-provider]', node).forEach((button) => {
+      button.addEventListener('click', () => switchProvider(button.dataset.provider));
+    });
+    bindTooltips(node);
+  }
+
+  async function switchProvider(provider) {
+    try {
+      const result = await api('/api/provider', {
+        method: 'POST',
+        body: JSON.stringify({ provider }),
+      });
+      toast(`Extraction now runs on ${result.provider} (${result.model})`);
+      loadHealth();
+    } catch (err) {
+      toast(`Could not switch provider: ${err.message}`, true);
     }
   }
 
@@ -190,27 +236,28 @@
     } catch (err) {
       state.samples = [];
     }
-    const list = $('#sample-list');
+    // One <select> rather than a wall of cards. Fourteen scenarios is a useful
+    // amount of test coverage and a terrible amount of landing page: it buried
+    // the actual task under a menu most visitors never need.
+    const select = $('#sample-select');
+    const why = $('#sample-why');
     if (!state.samples.length) {
-      list.innerHTML = '<p class="hint">No bundled samples found. Generate them with '
-        + '<code>node tools/invoice_gen/generate.js</code>.</p>';
+      select.innerHTML = '<option>No bundled samples found</option>';
+      select.disabled = true;
+      $('#sample-run').disabled = true;
+      why.textContent = 'Generate them with: node tools/invoice_gen/generate.js';
       return;
     }
-    list.innerHTML = state.samples.map((sample, index) => `
-      <button class="sample" type="button" data-file="${esc(sample.file)}"
-              data-tip="${esc('<div class=&quot;tt-head&quot;>' + sample.title + '</div>' + sample.why)}">
-        <span class="sample-n">${index + 1}</span>
-        <span class="sample-body">
-          <span class="sample-title">${esc(sample.title)}</span>
-          <span class="sample-why">${esc(sample.why)}</span>
-        </span>
-        ${decisionBadge(sample.expected)}
-      </button>`).join('');
+    select.innerHTML = state.samples
+      .map((s) => `<option value="${esc(s.file)}">${esc(s.title)} — expects ${esc(s.expected)}</option>`)
+      .join('');
 
-    $$('.sample', list).forEach((button) => {
-      button.addEventListener('click', () => runSample(button.dataset.file));
-    });
-    bindTooltips(list);
+    const describe = () => {
+      const picked = state.samples[select.selectedIndex];
+      why.textContent = picked ? picked.why : '';
+    };
+    select.addEventListener('change', describe);
+    describe();
   }
 
   // --------------------------------------------------------- starting a run
@@ -258,11 +305,15 @@
     state.openStages.clear();
     state.run = { run_id: runId, filename, status: 'running' };
     state.stages = [];
-    $('#run-empty').hidden = true;
-    $('#run-live').hidden = false;
+    showResultView(true);
     $('#run-filename').textContent = filename || runId;
-    $('#run-meta').innerHTML = '<span class="badge badge-accent">running</span>';
+    $('#run-meta').innerHTML = '';
     $('#decision').hidden = true;
+    $('#run-facts').hidden = true;
+    $('#run-checks').hidden = true;
+    $('#run-detail').hidden = true;
+    $('#run-working').hidden = false;
+    updateWorking();
     renderTimeline();
     showTab('run');
 
@@ -282,6 +333,7 @@
       const index = state.stages.findIndex((s) => s.seq === stage.seq);
       if (index >= 0) state.stages[index] = stage; else state.stages.push(stage);
       renderTimeline();
+      updateWorking();
     });
 
     source.addEventListener('run_finished', () => { finishRun(runId); });
@@ -325,8 +377,8 @@
       state.run = run;
       state.stages = run.stages || [];
       state.openStages.clear();
-      $('#run-empty').hidden = true;
-      $('#run-live').hidden = false;
+      showResultView(true);
+      $('#run-working').hidden = true;
       $('#run-filename').textContent = run.filename;
       renderRunMeta(run);
       renderTimeline();
@@ -411,7 +463,10 @@
     });
 
     bindTooltips(container);
-    $('#expand-btn').textContent = state.openStages.size >= stages.length ? 'Collapse all' : 'Expand all';
+    const expandBtn = $('#expand-btn');
+    if (expandBtn) {
+      expandBtn.textContent = state.openStages.size >= stages.length ? 'Collapse all' : 'Expand all';
+    }
   }
 
   // --------------------------------------------------- stage body renderers
@@ -732,35 +787,162 @@
 
   // --------------------------------------------------------------- decision
 
+  /** Swap between the intake hero and the result view. */
+  function showResultView(on) {
+    $('#run-intake').hidden = !!on;
+    $('#run-result').hidden = !on;
+  }
+
+  const STAGE_VERB = {
+    1: 'Reading the file…',
+    2: 'Extracting the fields…',
+    3: 'Checking every figure against the document…',
+    4: 'Looking up the vendor…',
+    5: 'Finding the purchase order…',
+    6: 'Running the checks…',
+    7: 'Deciding…',
+  };
+
+  /** Plain-language progress. The stage timeline still exists; this is the
+   *  version for someone who does not want to read seven rows to learn that
+   *  the thing is still working. */
+  function updateWorking() {
+    const done = state.stages.filter((s) => ['done', 'failed', 'skipped'].includes(s.status)).length;
+    const running = state.stages.find((s) => s.status === 'running');
+    const seq = running ? running.seq : Math.min(done + 1, 7);
+    const verb = $('#working-stage');
+    const step = $('#working-step');
+    const fill = $('#working-fill');
+    if (verb) verb.textContent = STAGE_VERB[seq] || 'Working…';
+    if (step) step.textContent = `step ${Math.min(seq, 7)} of 7`;
+    if (fill) fill.style.width = `${Math.round((done / 7) * 100)}%`;
+  }
+
+  const VERDICT_COPY = {
+    APPROVE: {
+      icon: '✓',
+      line: 'This invoice can be paid.',
+      sub: 'Every check passed. No one needs to open it.',
+    },
+    FLAG: {
+      icon: '!',
+      line: 'A person should look at this.',
+      sub: 'Nothing here is necessarily wrong - but it is not safe to pay automatically.',
+    },
+    REJECT: {
+      icon: '✕',
+      line: 'Do not pay this invoice.',
+      sub: 'A blocking check failed.',
+    },
+  };
+
   function renderDecision(run) {
     const node = $('#decision');
     const decision = run.decision;
+    $('#run-working').hidden = true;
+
     if (!decision) {
       if (run.status === 'failed') {
         node.hidden = false;
-        node.className = 'decision is-reject';
-        node.innerHTML = `<div class="decision-top"><span class="decision-verdict">Run failed</span></div>
-          <div class="decision-body"><p class="hint">${esc(run.error || '')}</p></div>`;
+        node.className = 'verdict is-reject';
+        node.innerHTML = `
+          <div class="v-mark">✕</div>
+          <div class="v-text">
+            <div class="v-line">The run could not finish.</div>
+            <div class="v-sub">${esc(run.error || 'No further detail was recorded.')}</div>
+          </div>`;
         return;
       }
       node.hidden = true;
       return;
     }
 
+    const verdict = decision.decision;
+    const copy = VERDICT_COPY[verdict] || { icon: '?', line: verdict, sub: '' };
+    // The headline reason is the one that decided it. The rest are detail and
+    // live under the checks list, so the verdict is readable in one glance.
+    const headline = decision.reasons && decision.reasons.length ? decision.reasons[0] : copy.sub;
+
     node.hidden = false;
-    node.className = `decision is-${decisionClass(decision.decision)}`;
+    node.className = `verdict is-${decisionClass(verdict)}`;
     node.innerHTML = `
-      <div class="decision-top">
-        <span class="decision-verdict">${esc(decision.decision)}</span>
-        ${decision.requires_human ? '<span class="badge">needs a human</span>' : ''}
-        <span class="decision-conf">
-          <b>${num(decision.confidence, 2)}</b>
-          extraction confidence
-        </span>
+      <div class="v-mark" aria-hidden="true">${copy.icon}</div>
+      <div class="v-text">
+        <div class="v-word">${esc(verdict)}</div>
+        <div class="v-line">${esc(copy.line)}</div>
+        <div class="v-sub">${esc(headline)}</div>
       </div>
-      <div class="decision-body">
-        <ol class="reasons">${decision.reasons.map((reason) => `<li>${esc(reason)}</li>`).join('')}</ol>
-      </div>`;
+      ${decision.requires_human ? '<div class="v-tag">needs a human</div>' : ''}`;
+
+    renderFacts(run);
+    renderChecks(run);
+    $('#run-detail').hidden = false;
+  }
+
+  /** The four things a person actually wants off an invoice. */
+  function renderFacts(run) {
+    const node = $('#run-facts');
+    const inv = run.normalized || {};
+    const po = run.po || {};
+    const money = inv.total_amount != null
+      ? `${esc(inv.currency || 'INR')} ${num(inv.total_amount, 2)}`
+      : '—';
+    const cells = [
+      ['Vendor', inv.vendor_name_raw || inv.vendor_name_canonical || '—'],
+      ['Invoice no.', inv.invoice_number || 'not printed'],
+      ['Amount', money],
+      ['Purchase order', po.matched ? po.po_number : 'none matched'],
+    ];
+    node.hidden = false;
+    node.innerHTML = cells.map(([k, v]) => `
+      <div class="fact">
+        <div class="fact-k">${esc(k)}</div>
+        <div class="fact-v">${esc(String(v))}</div>
+      </div>`).join('');
+  }
+
+  /** What was checked - failures first, the passes folded away. */
+  function renderChecks(run) {
+    const node = $('#run-checks');
+    const rules = run.rules || [];
+    if (!rules.length) { node.hidden = true; return; }
+
+    // A rule is skipped, passed, or failed - in that order of precedence,
+    // because a skipped rule also reports passed=true and must not be counted
+    // as a check that actually ran.
+    const kind = (r) => (r.skipped ? 'skip' : r.passed ? 'pass' : 'fail');
+    const failed = rules.filter((r) => kind(r) === 'fail');
+    const passed = rules.filter((r) => kind(r) === 'pass');
+    const skipped = rules.filter((r) => kind(r) === 'skip');
+
+    const row = (r) => {
+      const k = kind(r);
+      return `
+      <li class="check is-${esc(k)}">
+        <span class="check-mark">${k === 'pass' ? '✓' : k === 'fail' ? '✕' : '–'}</span>
+        <span class="check-body">
+          <span class="check-name">${esc(r.title || r.rule_id)}</span>
+          ${r.message ? `<span class="check-detail">${esc(r.message)}</span>` : ''}
+          ${k === 'fail' && r.expected ? `<span class="check-cmp">
+             <b>expected</b> ${esc(r.expected)} &nbsp;·&nbsp; <b>found</b> ${esc(r.actual || '—')}
+           </span>` : ''}
+        </span>
+        <span class="check-id">${esc(r.rule_id)}</span>
+      </li>`;
+    };
+
+    node.hidden = false;
+    node.innerHTML = `
+      <div class="checks-head">
+        <h3>What was checked</h3>
+        <span class="checks-count">${passed.length} of ${rules.length - skipped.length} passed</span>
+      </div>
+      ${failed.length ? `<ul class="check-list">${failed.map(row).join('')}</ul>` : ''}
+      ${passed.length || skipped.length ? `
+        <details class="checks-rest">
+          <summary>${failed.length ? 'Show the checks that passed' : 'Show all nine checks'}</summary>
+          <ul class="check-list">${passed.concat(skipped).map(row).join('')}</ul>
+        </details>` : ''}`;
   }
 
   // -------------------------------------------------------------- dashboard
@@ -1049,6 +1231,14 @@
       uploadFile(event.dataTransfer.files[0]);
     });
 
+    $('#sample-run').addEventListener('click', () => {
+      const select = $('#sample-select');
+      if (select && select.value) runSample(select.value);
+    });
+    $('#back-btn').addEventListener('click', () => {
+      if (state.source) { state.source.close(); state.source = null; }
+      showResultView(false);
+    });
     $('#replay-btn').addEventListener('click', replayRun);
     $('#view-pdf-btn').addEventListener('click', () => {
       if (state.run) window.open(`/api/runs/${encodeURIComponent(state.run.run_id)}/file`, '_blank');
