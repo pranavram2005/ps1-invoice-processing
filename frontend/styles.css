@@ -19,15 +19,38 @@
    (DECISIONS.md S12), and Geist's own fallback is system-ui, so the system
    stack is what their body text resolves to anyway. The look here comes from
    the scale, spacing and colour rather than from the typeface. */
+/* Geist, self-hosted.
+
+   zamp.ai serves these two files; they are copied into the repo rather than
+   linked, because the no-CDN rule (DECISIONS.md S12) exists so a graded live
+   demo cannot be broken by a third-party host, and that applies to a typeface
+   as much as to a script. Two files, 52 KB total, same origin as everything
+   else. */
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist-sans.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/geist-mono.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg:            #fafaf8;
   --surface:       #ffffff;
   --surface-2:     #f5f5f5;
-  --border:        rgba(45, 45, 45, .12);
-  --border-strong: rgba(45, 45, 45, .22);
+  --border:        rgba(23, 23, 23, .11);
+  --border-strong: rgba(23, 23, 23, .20);
 
-  --ink:           #2d2d2d;
-  --ink-2:         #4a4a4a;
+  --ink:           #171717;
+  --ink-2:         #454545;
   --ink-3:         #6e6e6e;
   --ink-4:         #9a9a9a;
 
@@ -48,13 +71,14 @@
   --reject-bg:     #fdecec;
   --reject-br:     #f7c3c3;
 
-  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   --radius: 12px;
   --radius-sm: 8px;
   --pill: 999px;
-  --nav-h: 64px;
+  --nav-h: 72px;
+  --inset: 46px;
   --shadow: 0 1px 2px rgba(45, 45, 45, .04), 0 6px 20px -8px rgba(45, 45, 45, .10);
 }
 
@@ -72,7 +96,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.02em; }
+h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -.03em; }
 code { font-family: var(--mono); font-size: .92em; background: var(--surface-2);
        border: 1px solid var(--border); border-radius: 4px; padding: .5px 4px; }
 
@@ -1271,6 +1295,338 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   color: var(--ink);
   font-weight: 550;
   border-bottom-color: var(--accent);
+}
+
+
+/* ==========================================================================
+   Navigation, charts and the layouts gallery - built to zamp.ai's own
+   measurements, read off the live site: a 72px bar, 46px page inset, the logo
+   hard left, links centred, a black pill on the right. Their type runs at
+   weight 400-500 with about -3% tracking on headings, which is most of why
+   their pages read the way they do.
+   ========================================================================== */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--nav-h);
+  padding: 0 var(--inset);
+  display: flex;
+  align-items: center;
+  background: rgba(250, 250, 248, .82);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  flex: none;
+  text-decoration: none;
+}
+
+/* Links are centred in the bar regardless of what sits either side, which is
+   what keeps the composition calm as the right-hand controls change width. */
+.nav-links {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 35px;
+}
+
+.nav-link {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -.01em;
+  color: var(--ink-3);
+  cursor: pointer;
+  position: relative;
+  transition: color .14s;
+}
+
+.nav-link:hover { color: var(--ink); }
+
+.nav-link.is-active { color: var(--ink); font-weight: 500; }
+
+.nav-link.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  bottom: -9px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+/* Their "Book Demo": solid black, fully rounded, #F5F5F5 text at weight 500. */
+.nav-cta {
+  appearance: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--pill);
+  background: #000;
+  color: #f5f5f5;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -.02em;
+  transition: opacity .14s;
+}
+
+.nav-cta:hover { opacity: .85; }
+
+.env-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 460px;
+  justify-content: flex-end;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ----- section headers ----------------------------------------------------- */
+
+.sec-head { margin: 0 0 24px; }
+
+.sec-head h2 {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -.03em;
+}
+
+.sec-sub {
+  margin: 7px 0 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  max-width: 62ch;
+}
+
+/* ----- charts -------------------------------------------------------------- */
+
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 16px;
+  margin: 18px 0 26px;
+  align-items: start;        /* cards size to their own content, not the tallest */
+}
+
+.chart {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px 22px;
+}
+
+.chart-h { font-size: 15.5px; font-weight: 500; letter-spacing: -.02em; }
+
+.chart-sub {
+  margin: 5px 0 18px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-4);
+}
+
+.chart-empty { font-size: 13px; color: var(--ink-4); margin: 0; }
+
+/* One 100% stacked bar. The 2px gap between segments is a surface-coloured
+   spacer, not a border - borders would shift the proportions. */
+.stack {
+  display: flex;
+  height: 40px;
+  border-radius: 7px;
+  overflow: hidden;
+  gap: 2px;
+  background: var(--surface);
+}
+
+.seg {
+  display: grid;
+  place-items: center;
+  min-width: 3px;
+  transition: filter .14s;
+}
+
+.seg:hover { filter: brightness(1.07); }
+
+.seg-n {
+  font-size: 13px;
+  font-weight: 550;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 18px;
+  margin-top: 14px;
+}
+
+.lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.lg-dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.lg b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.lg-pct { color: var(--ink-4); }
+
+/* Horizontal bars, one series, so one hue and no legend. */
+.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 26px minmax(60px, 1fr) 26px;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-id {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-4);
+}
+
+.bar-track {
+  height: 9px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  border-radius: 4px;
+  transition: width .4s ease;
+}
+
+.bar-n {
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-name {
+  grid-column: 2 / -1;
+  font-size: 11.5px;
+  color: var(--ink-4);
+  line-height: 1.3;
+  margin-top: -3px;
+}
+
+/* ----- layouts gallery ----------------------------------------------------- */
+
+.layouts { display: grid; gap: 16px; }
+
+.lay {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.lay-doc {
+  /* A4 proportions, so the rendered page fills the frame instead of floating in
+     the PDF viewer's own dark surround - which cannot be styled from here. */
+  aspect-ratio: 1 / 1.414;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.lay-doc iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+.lay-vendor { font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+
+.lay-dl { margin: 14px 0 0; display: grid; gap: 9px; }
+
+.lay-dl > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.lay-dl dt {
+  font-size: 10.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.lay-dl dd { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+
+.lay-hard {
+  margin: 15px 0 0;
+  padding-left: 13px;
+  border-left: 2px solid var(--accent);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.lay-runs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+
+.chip-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+@media (max-width: 1100px) {
+  .nav-links { position: static; transform: none; margin: 0 auto; gap: 22px; }
+}
+
+@media (max-width: 860px) {
+  .nav { padding: 0 18px; }
+  .nav-links { gap: 16px; }
+  .lay { grid-template-columns: 1fr; }
+  .lay-doc { height: 260px; }
 }
 
 /* The `hidden` attribute sets display:none at the lowest precedence, so any

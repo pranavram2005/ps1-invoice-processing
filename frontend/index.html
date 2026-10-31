@@ -9,27 +9,29 @@
 </head>
 <body>
 
-<header class="topbar">
-  <div class="topbar-left">
-    <div class="logo">🧾</div>
-    <div>
-      <h1>Invoice Processing</h1>
-      <p class="tagline">The model extracts. The code decides.</p>
-    </div>
-  </div>
-  <div class="topbar-right">
+<header class="nav">
+  <a class="nav-logo" href="#" aria-label="Invoice Processing home">
+    <svg viewBox="0 0 34 27" width="30" height="24" aria-hidden="true">
+      <path d="M2 2h30l-9 9H2z" fill="currentColor"/>
+      <path d="M2 16h30l-9 9H2z" fill="currentColor" opacity=".55"/>
+    </svg>
+  </a>
+
+  <nav class="nav-links" role="tablist" aria-label="Sections">
+    <button class="nav-link is-active" data-tab="run" role="tab">Run</button>
+    <button class="nav-link" data-tab="dashboard" role="tab">Dashboard</button>
+    <button class="nav-link" data-tab="layouts" role="tab">Layouts</button>
+    <button class="nav-link" data-tab="admin" role="tab">Admin</button>
+  </nav>
+
+  <div class="nav-right">
     <div class="provider" id="provider-switch" role="group" aria-label="Extraction provider"></div>
-    <div id="env-strip">
-      <span class="env-item"><span class="dot dot-idle" id="health-dot"></span><span id="health-text">connecting…</span></span>
-    </div>
+    <button class="nav-cta" id="env-btn" type="button" aria-expanded="false">
+      <span class="dot dot-ok"></span><span id="env-label">status</span>
+    </button>
+    <div class="env-pop" id="env-strip" hidden></div>
   </div>
 </header>
-
-<nav class="tabs" role="tablist">
-  <button class="tab is-active" data-tab="run" role="tab">Run</button>
-  <button class="tab" data-tab="dashboard" role="tab">Dashboard</button>
-  <button class="tab" data-tab="admin" role="tab">Admin</button>
-</nav>
 
 <main>
 
@@ -123,7 +125,14 @@
 
   <!-- ============================================== DASHBOARD ============ -->
   <section class="panel" id="panel-dashboard">
+    <div class="sec-head">
+      <h2>How the queue is running</h2>
+      <p class="sec-sub">Every invoice processed so far, and what happened to it.</p>
+    </div>
+
     <div class="tiles" id="tiles"></div>
+
+    <div class="charts" id="charts"></div>
 
     <div class="table-head">
       <h2>Processed invoices</h2>
@@ -152,6 +161,17 @@
       </table>
       <p class="empty-note" id="runs-empty" hidden>No runs match this filter.</p>
     </div>
+  </section>
+
+  <!-- ================================================ LAYOUTS ============ -->
+  <section class="panel" id="panel-layouts">
+    <div class="sec-head">
+      <h2>Invoice layouts it reads</h2>
+      <p class="sec-sub">Five vendors, five genuinely different documents. If every sample
+         used one template the extraction step would be filling in a form, not reading an
+         invoice - so each one hides the same facts somewhere else.</p>
+    </div>
+    <div class="layouts" id="layouts"></div>
   </section>
 
   <!-- ================================================== ADMIN ============ -->

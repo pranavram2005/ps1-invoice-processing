@@ -133,13 +133,23 @@
   // -------------------------------------------------------------------- tabs
 
   function showTab(name) {
-    $$('.tab').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.tab === name));
+    $$('.nav-link').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.tab === name));
     $$('.panel').forEach((panel) => panel.classList.toggle('is-active', panel.id === `panel-${name}`));
     if (name === 'dashboard') loadDashboard();
     if (name === 'admin') loadAdmin();
+    if (name === 'layouts') loadLayouts();
   }
 
-  $$('.tab').forEach((tab) => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
+  $$('.nav-link').forEach((tab) => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
+
+  /** Rule id -> human title, so a chart axis can say what R6 actually is. */
+  async function loadRuleNames() {
+    try {
+      const payload = await api('/api/rules');
+      state.ruleNames = {};
+      (payload.rules || []).forEach((r) => { state.ruleNames[r.id] = r.title; });
+    } catch (_) { state.ruleNames = {}; }
+  }
 
   // ------------------------------------------------------------ env / health
 
@@ -178,6 +188,8 @@
       strip.innerHTML = parts.join('');
       bindTooltips(strip);
       renderProviderSwitch(health);
+      const label = $('#env-label');
+      if (label) label.textContent = `${health.runs} run${health.runs === 1 ? '' : 's'}`;
     } catch (err) {
       strip.innerHTML = `<span class="env-item is-warn"><span class="dot dot-bad"></span>API unreachable</span>`;
     }
@@ -853,11 +865,21 @@
         : status === 'failed' ? '✕'
         : status === 'skipped' ? '–'
         : status === 'running' ? '' : i + 1;
-      return `<li class="ph is-${esc(status)}" title="${esc(phase.doing)}">
+      // Hovering a phase shows what that step actually did on *this* invoice -
+      // the stage's own summary and timing - rather than a generic description.
+      // Before it runs there is nothing to report, so it explains what it will
+      // do instead.
+      const tip = stage && stage.summary
+        ? `<div class="tt-head">${esc(phase.name)}${
+            stage.duration_ms != null ? ` · ${duration(stage.duration_ms)}` : ''
+          }</div>${esc(stage.summary)}`
+        : `<div class="tt-head">${esc(phase.name)}</div>${esc(phase.doing)}`;
+      return `<li class="ph is-${esc(status)}" data-tip="${esc(tip)}">
         <span class="ph-dot">${mark}</span>
         <span class="ph-name">${esc(phase.name)}</span>
       </li>`;
     }).join('');
+    bindTooltips(node);
 
     // Narrate the live stage. Once everything is terminal this clears, because
     // the verdict below it is then the thing to read.
@@ -1129,13 +1151,197 @@
         </details>` : ''}`;
   }
 
+
+
+  // ----------------------------------------------------------------- layouts
+
+  /* Why this tab exists: "it extracts invoices" means little until you see that
+   * the five documents genuinely differ. Each vendor hides the same facts in a
+   * different place, so the extraction step is reading a document rather than
+   * filling in a known form. */
+  const LAYOUT_NOTES = {
+    meridian: {
+      vendor: 'Meridian Office Supplies',
+      shape: 'Clean itemised table',
+      tax: 'CGST + SGST broken out separately',
+      po: 'A labelled field in the header',
+      hard: 'The easy case, and the baseline the others are measured against.',
+    },
+    sharma: {
+      vendor: 'Sharma Steel Works',
+      shape: 'Traditional bordered, serif, dense',
+      tax: 'IGST as one line',
+      po: 'Header block on some invoices, a footnote on others',
+      hard: 'The PO moves between invoices from the same vendor, so its position cannot be learned.',
+    },
+    nalanda: {
+      vendor: 'Nalanda Print & Packaging',
+      shape: 'One bundled line, no itemisation',
+      tax: 'Embedded in the rate and never stated',
+      po: 'Buried mid-sentence in a remarks paragraph',
+      hard: 'Nothing to total up and no tax line to find - the model has to read prose to get the PO.',
+    },
+    kaveri: {
+      vendor: 'Kaveri Logistics',
+      shape: 'Dense freight table',
+      tax: 'GST at 5%, the goods-transport rate',
+      po: 'A numbered footnote at the foot of the page',
+      hard: 'Also the scanned one: an image with no text layer at all.',
+    },
+    orbit: {
+      vendor: 'Orbit Facility Services',
+      shape: 'Services table, man-day units',
+      tax: 'CGST + SGST broken out',
+      po: 'Sometimes nowhere - the document names no PO',
+      hard: 'Tests what happens when the thing being looked for does not exist.',
+    },
+  };
+
+  async function loadLayouts() {
+    const node = $('#layouts');
+    if (!node || node.dataset.loaded) return;
+    const samples = state.samples.length ? state.samples : await api('/api/samples').catch(() => []);
+    const byLayout = new Map();
+    samples.forEach((s) => {
+      const key = Object.keys(LAYOUT_NOTES).find((k) => (s.file || '').toLowerCase().includes(k));
+      if (!key) return;
+      if (!byLayout.has(key)) byLayout.set(key, []);
+      byLayout.get(key).push(s);
+    });
+
+    node.innerHTML = Array.from(byLayout.entries()).map(([key, items]) => {
+      const note = LAYOUT_NOTES[key];
+      const first = items[0];
+      return `
+      <article class="lay">
+        <div class="lay-doc">
+          <iframe src="/api/samples/${encodeURIComponent(first.file)}/file#toolbar=0&navpanes=0&scrollbar=0&view=Fit"
+                  title="${esc(note.vendor)} invoice"></iframe>
+        </div>
+        <div class="lay-body">
+          <h3 class="lay-vendor">${esc(note.vendor)}</h3>
+          <dl class="lay-dl">
+            <div><dt>Shape</dt><dd>${esc(note.shape)}</dd></div>
+            <div><dt>Tax</dt><dd>${esc(note.tax)}</dd></div>
+            <div><dt>PO reference</dt><dd>${esc(note.po)}</dd></div>
+          </dl>
+          <p class="lay-hard">${esc(note.hard)}</p>
+          <div class="lay-runs">
+            ${items.map((s) => `<button class="chip chip-run" type="button"
+                 data-sample="${esc(s.file)}">${esc(s.title)} ${decisionBadge(s.expected)}</button>`).join('')}
+          </div>
+        </div>
+      </article>`;
+    }).join('');
+
+    $$('.chip-run', node).forEach((b) => b.addEventListener('click', () => runSample(b.dataset.sample)));
+    node.dataset.loaded = '1';
+  }
+
+  // ------------------------------------------------------------------ charts
+
+  /* Two charts, both earning their place.
+   *
+   * Decisions are a *status* quantity, not a categorical one - good / warning /
+   * critical - so they use the reserved status colours rather than a series
+   * palette, and every segment is direct-labelled because status must never be
+   * carried by colour alone. The hues were checked with a CVD validator rather
+   * than picked by eye: at deuteranopia the amber/red pair separates by dE 10.3,
+   * comfortably past the 8 threshold where a chart stops being readable for the
+   * ~8% of men with red-green colour blindness. The amber sits below 3:1 against
+   * the page, which is why the labels are not optional and why the table below
+   * is part of the answer.
+   *
+   * The rules chart is one series, so it takes one hue and no legend - the
+   * heading names it.
+   */
+  const CHART = {
+    APPROVE: { fill: '#1f8a63', label: 'Approved' },
+    FLAG:    { fill: '#d8a008', label: 'Flagged' },
+    REJECT:  { fill: '#ef4a4a', label: 'Rejected' },
+  };
+
+  function renderCharts(runs) {
+    const node = $('#charts');
+    if (!node) return;
+    const done = runs.filter((r) => r.decision);
+    if (!done.length) { node.innerHTML = ''; return; }
+
+    node.innerHTML = `
+      <section class="chart">
+        <h3 class="chart-h">Where invoices ended up</h3>
+        <p class="chart-sub">${done.length} processed. The approved ones are invoices nobody had to open.</p>
+        ${decisionBar(done)}
+      </section>
+      <section class="chart">
+        <h3 class="chart-h">Which checks caught something</h3>
+        <p class="chart-sub">Counts every time a check failed, across all ${done.length} invoices.</p>
+        ${ruleBars(done)}
+      </section>`;
+  }
+
+  /** One 100% stacked bar: the whole queue, split by outcome. */
+  function decisionBar(runs) {
+    const order = ['APPROVE', 'FLAG', 'REJECT'];
+    const counts = order.map((d) => ({
+      key: d, ...CHART[d], n: runs.filter((r) => r.decision === d).length,
+    })).filter((c) => c.n > 0);
+    const total = runs.length;
+
+    const segs = counts.map((c) => {
+      const pct = (c.n / total) * 100;
+      return `<div class="seg" style="flex:${c.n};background:${c.fill}"
+                   title="${esc(c.label)}: ${c.n} of ${total} (${pct.toFixed(0)}%)"
+                   role="img" aria-label="${esc(c.label)} ${c.n}">
+                ${pct >= 11 ? `<span class="seg-n">${c.n}</span>` : ''}
+              </div>`;
+    }).join('');
+
+    // Legend is always present; each entry carries its own count so identity
+    // never rests on the colour.
+    const legend = counts.map((c) => `
+      <span class="lg">
+        <i class="lg-dot" style="background:${c.fill}"></i>
+        ${esc(c.label)} <b>${c.n}</b>
+        <span class="lg-pct">${((c.n / total) * 100).toFixed(0)}%</span>
+      </span>`).join('');
+
+    return `<div class="stack">${segs}</div><div class="legend">${legend}</div>`;
+  }
+
+  /** Horizontal bars: how often each rule actually caught something. */
+  function ruleBars(runs) {
+    const tally = new Map();
+    runs.forEach((r) => (r.failed_rules || []).forEach((id) => {
+      tally.set(id, (tally.get(id) || 0) + 1);
+    }));
+    if (!tally.size) {
+      return '<p class="chart-empty">No check has failed yet - every invoice passed all nine.</p>';
+    }
+    const rows = Array.from(tally.entries()).sort((a, b) => b[1] - a[1]);
+    const max = rows[0][1];
+    const names = state.ruleNames || {};
+
+    return `<ul class="bars">${rows.map(([id, n]) => `
+      <li class="bar-row" title="${esc(names[id] || id)}: caught ${n}">
+        <span class="bar-id">${esc(id)}</span>
+        <span class="bar-track">
+          <span class="bar-fill" style="width:${(n / max) * 100}%"></span>
+        </span>
+        <span class="bar-n">${n}</span>
+        <span class="bar-name">${esc(names[id] || '')}</span>
+      </li>`).join('')}</ul>`;
+  }
+
   // -------------------------------------------------------------- dashboard
 
   async function loadDashboard() {
     try {
       const [stats, runs] = await Promise.all([api('/api/stats'), api('/api/runs')]);
+      if (!state.ruleNames) await loadRuleNames();
       state.runs = runs;
       renderTiles(stats);
+      renderCharts(runs);
       renderRunsTable();
     } catch (err) {
       toast(`Dashboard failed to load: ${err.message}`, true);
@@ -1415,6 +1621,14 @@
       uploadFile(event.dataTransfer.files[0]);
     });
 
+    const envBtn = $('#env-btn');
+    if (envBtn) {
+      envBtn.addEventListener('click', () => {
+        const pop = $('#env-strip');
+        pop.hidden = !pop.hidden;
+        envBtn.setAttribute('aria-expanded', String(!pop.hidden));
+      });
+    }
     $('#sample-run').addEventListener('click', () => {
       const select = $('#sample-select');
       if (select && select.value) runSample(select.value);

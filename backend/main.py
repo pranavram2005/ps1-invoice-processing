@@ -421,6 +421,20 @@ def list_samples() -> list[dict]:
     return seed.describe_samples()
 
 
+@app.get("/api/samples/{name}/file")
+def get_sample_file(name: str) -> FileResponse:
+    """A bundled sample PDF, served inline so the Layouts tab can show it."""
+    safe = Path(name).name
+    path = SAMPLE_INVOICE_DIR / safe
+    if path.suffix.lower() != ".pdf" or not path.exists():
+        raise HTTPException(404, f"sample '{safe}' not found")
+    return FileResponse(
+        str(path),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe}"'},
+    )
+
+
 @app.post("/api/samples/{name}/run")
 async def run_sample(name: str) -> dict:
     safe = Path(name).name
