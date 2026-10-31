@@ -3,9 +3,9 @@
   "source": "tools/make_fixtures.py from data/invoices/ground_truth.json",
   "keyed_by": "sha256 of the PDF bytes",
   "fixtures": {
-    "f3ff22b105357067b82b7b5be2103813839b04a20b0c271b734c09cbeae33cef": {
+    "4268992399d0c97a050f632623c5894e2fb48742abe2eb0f23b9d048aac2ace0": {
       "file": "INV-MER-0881_meridian_happy.pdf",
-      "sha256_short": "f3ff22b105357067",
+      "sha256_short": "4268992399d0c97a",
       "pdf_kind": "text",
       "expect": {
         "decision": "APPROVE",
@@ -100,9 +100,9 @@
         ]
       }
     },
-    "7b5a612db620d396f0e339239cf1ec5ceb4db9630c166503301b6cf97c9a9f50": {
+    "bab07dd3907769195ae680a69b7d3aca5a8edda40e017cf33734adb19e60742a": {
       "file": "INV-SSW-2211_sharma_split_po.pdf",
-      "sha256_short": "7b5a612db620d396",
+      "sha256_short": "bab07dd390776919",
       "pdf_kind": "text",
       "expect": {
         "decision": "REJECT",
@@ -196,9 +196,9 @@
         ]
       }
     },
-    "f75a128e8a4d91208cff12a39573230b780724ca7825471b0d78542cf6b45b17": {
+    "a5416ee66c507e403186c6c4015820154473a38d616360a1827d908fb2594d88": {
       "file": "INV-NL-118_nalanda_original.pdf",
-      "sha256_short": "f75a128e8a4d9120",
+      "sha256_short": "a5416ee66c507e40",
       "pdf_kind": "text",
       "expect": {
         "decision": "APPROVE",
@@ -264,9 +264,9 @@
         ]
       }
     },
-    "febd5f7e8441de0fcb3ed1d55457c9625453fb5178b831464bd97af76bd8c1ae": {
+    "922a7d9d8e17fac8f0357bf58bc10cdcd11406f31dff4a0b8949651671be0ab2": {
       "file": "INV-NL-127_nalanda_reissue.pdf",
-      "sha256_short": "febd5f7e8441de0f",
+      "sha256_short": "922a7d9d8e17fac8",
       "pdf_kind": "text",
       "expect": {
         "decision": "FLAG",
@@ -332,9 +332,9 @@
         ]
       }
     },
-    "63b335e98eed4970d2d7d077dc978ebd9f2328032f48ac6e2c384678a0bc0f60": {
+    "34df04bdf82ba6394d2725ae1d77fc69efc7a164e110b9f13625fcaa501f388e": {
       "file": "INV-KAV-7731_kaveri_scanned.pdf",
-      "sha256_short": "63b335e98eed4970",
+      "sha256_short": "34df04bdf82ba639",
       "pdf_kind": "scanned",
       "expect": {
         "decision": "FLAG",
@@ -422,9 +422,9 @@
         ]
       }
     },
-    "607986a46a1587a45ca97941de5fffdd0cbe899744c4dd9f2cddcf4853bb2c1d": {
+    "44ef7b79e6f8d3dbcfa317b73cf3678abc3ddd1d560bb6a7cf3bf86234f50f9d": {
       "file": "INV-ORB-5540_orbit_no_po.pdf",
-      "sha256_short": "607986a46a1587a4",
+      "sha256_short": "44ef7b79e6f8d3db",
       "pdf_kind": "text",
       "expect": {
         "decision": "FLAG",
@@ -496,9 +496,9 @@
         ]
       }
     },
-    "2bc58ceaa0d7af8a3e12864007b9bf7673b1989d8c8e0f5b068d103feae8d7a4": {
+    "4c8a24770467637b38fac903130aea5976e1b7a4c9be048ab9591dacca16f002": {
       "file": "INV-SSW-2240_sharma_within_tolerance.pdf",
-      "sha256_short": "2bc58ceaa0d7af8a",
+      "sha256_short": "4c8a24770467637b",
       "pdf_kind": "text",
       "expect": {
         "decision": "APPROVE",
@@ -580,9 +580,9 @@
         ]
       }
     },
-    "7ffb26cdac2d4026fb156b4bcf24cac19c7bbf58c0b418bc6c86749bfd615771": {
+    "f6ea08c867d2d3ed7934e80f6ca27c6ba0e527393c1ec3a89a890cbc1e9d92ed": {
       "file": "INV-SSW-2241_sharma_over_tolerance.pdf",
-      "sha256_short": "7ffb26cdac2d4026",
+      "sha256_short": "f6ea08c867d2d3ed",
       "pdf_kind": "text",
       "expect": {
         "decision": "FLAG",
@@ -664,9 +664,9 @@
         ]
       }
     },
-    "6533950ae07cfe8758bd14de03b930ec27f92609f0ccef0a4e1913d28c1d1539": {
+    "a938263031bb0467b1357eb5e486b62d7bb6763f95ed3aba91a623e17b8d676a": {
       "file": "INV-MER-0902_meridian_arithmetic.pdf",
-      "sha256_short": "6533950ae07cfe87",
+      "sha256_short": "a938263031bb0467",
       "pdf_kind": "text",
       "expect": {
         "decision": "FLAG",
@@ -739,6 +739,392 @@
             "field": "total_amount",
             "page": 1,
             "quote": "Total payable INR 2,79,440.00 Warranty 3"
+          }
+        ]
+      }
+    },
+    "04190c064cea0c125255634a9a7f03a4ba70dc1f9ff7939301e245d939c6c935": {
+      "file": "INV-ORB-5561_orbit_over_reject.pdf",
+      "sha256_short": "04190c064cea0c12",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "REJECT",
+        "because": "R5 - 18.00% over PO-4480, past the 10% reject threshold rather than inside the flag band"
+      },
+      "extraction": {
+        "vendor_name": "Orbit Facility Services",
+        "vendor_gstin": "07AAHCO7890E1Z1",
+        "invoice_number": "ORB/2026/5561",
+        "invoice_date": "28/10/2026",
+        "invoice_date_iso": "2026-10-28",
+        "currency": "INR",
+        "po_reference": "PO-4480",
+        "line_items": [
+          {
+            "description": "Annual maintenance contract - HVAC, 12 months",
+            "quantity": 1,
+            "unit_price": 72000,
+            "line_total": 72000
+          },
+          {
+            "description": "Pest control - quarterly cycle",
+            "quantity": 4,
+            "unit_price": 6250,
+            "line_total": 25000
+          },
+          {
+            "description": "Facade cleaning, high-rise rope access",
+            "quantity": 264,
+            "unit_price": 125,
+            "line_total": 33000
+          }
+        ],
+        "subtotal": 130000,
+        "tax_amount": 23400,
+        "total_amount": 153400,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "O Orbit Facility Services INTEGRATED FACILITY"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "\u00b7 invoices@orbitfacility.example GSTIN 07AAHCO7890E1Z1 TAX INVOICE"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "DETAILS Invoice number ORB/2026/5561 Invoice date"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "ORB/2026/5561 Invoice date 28/10/2026 Payment due"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "11,700.00 Amount payable INR 1,53,400.00 Scope"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "27/11/2026 Against PO PO-4480 Place of"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "33,000.00 Taxable value 1,30,000.00 CGST @"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Amount payable INR 1,53,400.00 Scope expanded"
+          }
+        ]
+      }
+    },
+    "0546d1497cd39b149a8f08ae697d65476e1c3de70c4461eb69a02dc2ccd290c7": {
+      "file": "INV-TCE-3310_tricity_blocked_vendor.pdf",
+      "sha256_short": "0546d1497cd39b14",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "REJECT",
+        "because": "R3 - vendor is on the master but blocked; R4 also flags because a blocked vendor has no open PO"
+      },
+      "extraction": {
+        "vendor_name": "Tri-City Electricals",
+        "vendor_gstin": "24AAJCT2345F1Z4",
+        "invoice_number": "TCE/2026/3310",
+        "invoice_date": "23/10/2026",
+        "invoice_date_iso": "2026-10-23",
+        "currency": "INR",
+        "po_reference": null,
+        "line_items": [
+          {
+            "description": "LT distribution panel, 415 V, IP54, fully wired",
+            "quantity": 1,
+            "unit_price": 86500,
+            "line_total": 86500
+          },
+          {
+            "description": "Perforated cable tray, GI, 300 mm with couplers",
+            "quantity": 240,
+            "unit_price": 385,
+            "line_total": 92400
+          },
+          {
+            "description": "Installation, termination and load testing",
+            "quantity": 1,
+            "unit_price": 24000,
+            "line_total": 24000
+          }
+        ],
+        "subtotal": 202900,
+        "tax_amount": 36522,
+        "total_amount": 239422,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Tri-City Electricals Structural Steel"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "| billing@tricityelectricals.example GSTIN 24AAJCT2345F1Z4 | PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "29AABCH4455L1ZQ Invoice No. TCE/2026/3310 Dated 23/10/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. TCE/2026/3310 Dated 23/10/2026 Payment due"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "Grand Total ( INR ) 2,39,422.00"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "24,000.00 Taxable Value 2,02,900.00 IGST @"
+          },
+          {
+            "field": "tax_amount",
+            "page": 1,
+            "quote": "IGST @ 18% 36,522.00 Grand Total"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Grand Total (INR) 2,39,422.00 Supply against"
+          }
+        ]
+      }
+    },
+    "8760ecdca76450c1b4b012546063f59e8c01ef2927fe82dc38d272a7ecea5aa5": {
+      "file": "INV-VEC-8120_vectra_unknown_vendor.pdf",
+      "sha256_short": "8760ecdca76450c1",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "REJECT",
+        "because": "R3 - no vendor on the master matches by GSTIN or name above the floor; R4 also flags as there is no PO"
+      },
+      "extraction": {
+        "vendor_name": "Vectra Switchgear & Controls",
+        "vendor_gstin": "27AABCV7788K1Z2",
+        "invoice_number": "VEC/2026/8120",
+        "invoice_date": "29/10/2026",
+        "invoice_date_iso": "2026-10-29",
+        "currency": "INR",
+        "po_reference": null,
+        "line_items": [
+          {
+            "description": "MCB distribution boards, 8-way, double door",
+            "quantity": 34,
+            "unit_price": 3450,
+            "line_total": 117300
+          },
+          {
+            "description": "Industrial sockets, 32 A, 5-pin, IP67",
+            "quantity": 120,
+            "unit_price": 640,
+            "line_total": 76800
+          }
+        ],
+        "subtotal": 194100,
+        "tax_amount": 34938,
+        "total_amount": 229038,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Vectra Switchgear & Controls O F"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "412220, Maharashtra GSTIN 27AABCV7788K1Z2 \u00b7 PAN"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "INVOICE Invoice No. VEC/2026/8120 Invoice Date"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "VEC/2026/8120 Invoice Date 29/10/2026 Due Date"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "17,469.00 Total payable INR 2,29,038.00 New"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "76,800.00 Taxable value 1,94,100.00 CGST @"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Total payable INR 2,29,038.00 New supplier"
+          }
+        ]
+      }
+    },
+    "dad18380154c41f76a75c0f2b92b3bd894aa3de5b8f6b10cc82523cc01351eae": {
+      "file": "INV-NL-094_nalanda_stale_date.pdf",
+      "sha256_short": "dad18380154c41f7",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R8 - dated 10-03-2026, beyond the 180-day staleness limit, while every other check passes"
+      },
+      "extraction": {
+        "vendor_name": "Nalanda Print & Packaging",
+        "vendor_gstin": "33AAFCN9012C1Z7",
+        "invoice_number": "NL/2026/094",
+        "invoice_date": "10/03/2026",
+        "invoice_date_iso": "2026-03-10",
+        "currency": "INR",
+        "po_reference": "PO-4478",
+        "line_items": [
+          {
+            "description": "Exhibition collateral - 6 roll-up standees, 2 backdrop panels and 1,500 leaflets, including artwork adaptation and freight to the Chennai venue",
+            "quantity": 1,
+            "unit_price": 93000,
+            "line_total": 93000
+          }
+        ],
+        "subtotal": 93000,
+        "tax_amount": null,
+        "total_amount": 93000,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Nalanda Print & Packaging I N"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "Due 09/04/2026 GSTIN 33AAFCN9012C1Z7 INVOICE TO"
+          },
+          {
+            "field": "invoice_number",
+            "page": 1,
+            "quote": "nalandaprint@example.net Invoice No. NL/2026/094 Date 10/03/2026"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. NL/2026/094 Date 10/03/2026 Due 09/04/2026"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "your Purchase Order PO-4478 dated 01-09-2026"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "4911 1 lot 93,000.00 TOTAL PAYABLE"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "4911 1 lot 93,000.00 TOTAL PAYABLE"
+          }
+        ]
+      }
+    },
+    "63204d186be2a3949a0a1a3cbfc19b84dda371f22e3cbefdc53ac1b1a42fc39e": {
+      "file": "INV-MER-NONUM_meridian_missing_number.pdf",
+      "sha256_short": "63204d186be2a394",
+      "pdf_kind": "text",
+      "expect": {
+        "decision": "FLAG",
+        "because": "R1 - no invoice number printed; vendor and total are present, so it flags rather than rejects"
+      },
+      "extraction": {
+        "vendor_name": "Meridian Office Supplies LLP",
+        "vendor_gstin": "29AACFM5678B1Z3",
+        "invoice_number": null,
+        "invoice_date": "30/10/2026",
+        "invoice_date_iso": "2026-10-30",
+        "currency": "INR",
+        "po_reference": "PO-4476",
+        "line_items": [
+          {
+            "description": "Ergonomic task chairs, mesh back, adjustable arms",
+            "quantity": 85,
+            "unit_price": 2400,
+            "line_total": 204000
+          },
+          {
+            "description": "Monitor arms, dual, gas spring",
+            "quantity": 46,
+            "unit_price": 1000,
+            "line_total": 46000
+          }
+        ],
+        "subtotal": 250000,
+        "tax_amount": 45000,
+        "total_amount": 295000,
+        "notes": null,
+        "model_confidence": 0.94,
+        "provenance": [
+          {
+            "field": "vendor_name",
+            "page": 1,
+            "quote": "Meridian Office Supplies LLP O F"
+          },
+          {
+            "field": "vendor_gstin",
+            "page": 1,
+            "quote": "560004, Karnataka GSTIN 29AACFM5678B1Z3 \u00b7 PAN"
+          },
+          {
+            "field": "invoice_date",
+            "page": 1,
+            "quote": "No. Invoice Date 30/10/2026 Due Date"
+          },
+          {
+            "field": "currency",
+            "page": 1,
+            "quote": "22,500.00 Total payable INR 2,95,000.00 Delivered"
+          },
+          {
+            "field": "po_reference",
+            "page": 1,
+            "quote": "29/11/2026 Purchase Order PO-4476 B I"
+          },
+          {
+            "field": "subtotal",
+            "page": 1,
+            "quote": "46,000.00 Taxable value 2,50,000.00 CGST @"
+          },
+          {
+            "field": "total_amount",
+            "page": 1,
+            "quote": "Total payable INR 2,95,000.00 Delivered to"
           }
         ]
       }

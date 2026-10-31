@@ -29,6 +29,17 @@ EXPECTED: dict[str, tuple[str, set[str]]] = {
     "INV-SSW-2240_sharma_within_tolerance.pdf": ("APPROVE", set()),
     "INV-SSW-2241_sharma_over_tolerance.pdf": ("FLAG", {"R5"}),
     "INV-MER-0902_meridian_arithmetic.pdf": ("FLAG", {"R2"}),
+    # R5's reject severity, which nothing else reaches: 18% over, past the 10%
+    # threshold rather than inside the flag band.
+    "INV-ORB-5561_orbit_over_reject.pdf": ("REJECT", {"R5"}),
+    # Both R3 cases also trip R4, and that is not incidental: a vendor who is
+    # blocked or unrecognised has no open PO to match against. Asserting the
+    # pair keeps the two apart - what differs is the stage-4 payload, where the
+    # blocked vendor matches confidently on GSTIN and the unknown one not at all.
+    "INV-TCE-3310_tricity_blocked_vendor.pdf": ("REJECT", {"R3", "R4"}),
+    "INV-VEC-8120_vectra_unknown_vendor.pdf": ("REJECT", {"R3", "R4"}),
+    "INV-NL-094_nalanda_stale_date.pdf": ("FLAG", {"R8"}),
+    "INV-MER-NONUM_meridian_missing_number.pdf": ("FLAG", {"R1"}),
 }
 
 

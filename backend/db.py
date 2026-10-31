@@ -494,7 +494,18 @@ def find_extraction_by_hash(file_sha256: str, exclude_run_id: str | None = None)
         return None
     if not payload.get("extraction"):
         return None
-    return {"run_id": row["run_id"], "extraction": payload["extraction"]}
+    return {
+        "run_id": row["run_id"],
+        "extraction": payload["extraction"],
+        # The *true* origin of these values, which is what a caller needs to
+        # decide whether reusing them is honest - not merely that they came from
+        # the cache. A cache hit on a cache hit reports what it inherited, so a
+        # fixture cannot be laundered into looking like real extraction by being
+        # copied twice.
+        "origin": payload.get("extraction_origin")
+        or payload.get("extraction_source")
+        or "live",
+    }
 
 
 def find_near_duplicate(

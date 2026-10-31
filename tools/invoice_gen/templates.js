@@ -608,6 +608,11 @@ function orbit(inv) {
         <div class="kv"><span>Invoice number</span><span>${esc(inv.invoiceNo)}</span></div>
         <div class="kv"><span>Invoice date</span><span>${esc(inv.date)}</span></div>
         <div class="kv"><span>Payment due</span><span>${esc(inv.dueDate)}</span></div>
+        ${
+          inv.poRef && inv.poPlacement === 'header'
+            ? `<div class="kv"><span>Against PO</span><span>${esc(inv.poRef)}</span></div>`
+            : ''
+        }
         <div class="kv"><span>Place of supply</span><span>Karnataka (29)</span></div>
       </div>
     </div>

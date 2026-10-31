@@ -65,6 +65,34 @@ const VENDORS = {
     email: 'invoices@orbitfacility.example',
     bank: { name: 'State Bank of India, Okhla', account: '38812044567', ifsc: 'SBIN0001234' },
   },
+
+  // On the vendor master but **blocked**, so an invoice from them fails R3 for a
+  // different reason than an unknown vendor does - and stage 4 shows the
+  // difference: a confident GSTIN match whose status is `blocked`, rather than
+  // no match at all. The GSTIN below is deliberately the one `backend/seed.py`
+  // records for V-1006, so resolution matches on GSTIN rather than on the name.
+  tricity: {
+    name: 'Tri-City Electricals',
+    address: ['Shed 9, GIDC Estate, Vatva', 'Ahmedabad 382445, Gujarat'],
+    gstin: '24AAJCT2345F1Z4',
+    pan: 'AAJCT2345F',
+    phone: '+91 79 2583 4410',
+    email: 'billing@tricityelectricals.example',
+    bank: { name: 'Bank of Baroda, Vatva', account: '04120200001234', ifsc: 'BARB0VATVAX' },
+  },
+
+  // Not on the vendor master at all, under any name or GSTIN. The name is
+  // deliberately unlike every approved vendor so the fuzzy match lands well
+  // below the 0.85 floor instead of scraping past it.
+  vectra: {
+    name: 'Vectra Switchgear & Controls',
+    address: ['Unit 22, Ranjangaon MIDC', 'Pune 412220, Maharashtra'],
+    gstin: '27AABCV7788K1Z2',
+    pan: 'AABCV7788K',
+    phone: '+91 20 6710 3355',
+    email: 'accounts@vectraswitchgear.example',
+    bank: { name: 'Kotak Mahindra Bank, Ranjangaon', account: '7311456098', ifsc: 'KKBK0001789' },
+  },
 };
 
 const INVOICES = [
@@ -280,6 +308,143 @@ const INVOICES = [
     statedTotal: 279440.0,
     terms: 'Warranty 3 years onsite, direct with manufacturer.',
     expect: { decision: 'FLAG', because: 'R2 - line items plus tax come to 3,04,440.00 but the invoice states 2,79,440.00' },
+  },
+
+  // ------------------------------------- 10. past the reject threshold (18%)
+  // The other half of R5. Invoice 7 sits inside tolerance and invoice 8 sits in
+  // the band between tolerance and rejection; nothing exercised the far side of
+  // it, so the rule's REJECT severity was dead code as far as the samples went.
+  // PO-4480 carries no prior billing, which keeps R6 abstaining and leaves this
+  // a clean single-rule rejection.
+  {
+    file: 'INV-ORB-5561_orbit_over_reject.pdf',
+    layout: 'orbit',
+    vendor: VENDORS.orbit,
+    invoiceNo: 'ORB/2026/5561',
+    date: '28/10/2026',
+    dueDate: '27/11/2026',
+    poRef: 'PO-4480',
+    poPlacement: 'header',
+    taxMode: 'cgst_sgst',
+    items: [
+      { desc: 'Annual maintenance contract - HVAC, 12 months', hsn: '9987', qty: 1, uom: 'lot', rate: 72000.0 },
+      { desc: 'Pest control - quarterly cycle', hsn: '9985', qty: 4, uom: 'cycles', rate: 6250.0 },
+      { desc: 'Facade cleaning, high-rise rope access', hsn: '9985', qty: 264, uom: 'sqm', rate: 125.0 },
+    ],
+    terms: 'Scope expanded mid-contract at the site manager\'s request. Revised schedule attached.',
+    expect: {
+      decision: 'REJECT',
+      because: 'R5 - 18.00% over PO-4480, past the 10% reject threshold rather than inside the flag band',
+    },
+  },
+
+  // ----------------------------------------- 11. blocked vendor on the master
+  // V-1006 is on the vendor master with status `blocked`. The README has always
+  // claimed this scenario existed; no invoice actually exercised it. Resolution
+  // matches confidently on GSTIN and *then* finds the block, which is a
+  // different stage-4 payload from an unknown vendor - the point of the pair.
+  {
+    file: 'INV-TCE-3310_tricity_blocked_vendor.pdf',
+    layout: 'sharma',
+    vendor: VENDORS.tricity,
+    invoiceNo: 'TCE/2026/3310',
+    date: '23/10/2026',
+    dueDate: '22/11/2026',
+    poRef: null,
+    poPlacement: null,
+    taxMode: 'igst',
+    items: [
+      { desc: 'LT distribution panel, 415 V, IP54, fully wired', hsn: '8537', qty: 1, uom: 'no', rate: 86500.0 },
+      { desc: 'Perforated cable tray, GI, 300 mm with couplers', hsn: '7308', qty: 240, uom: 'rmt', rate: 385.0 },
+      { desc: 'Installation, termination and load testing', hsn: '9987', qty: 1, uom: 'lot', rate: 24000.0 },
+    ],
+    terms: 'Supply against our quotation TCE/Q/2026/881. Test certificates enclosed.',
+    expect: {
+      decision: 'REJECT',
+      because: 'R3 - vendor is on the master but blocked; R4 also flags because a blocked vendor has no open PO',
+    },
+  },
+
+  // ---------------------------------------------- 12. vendor not on the master
+  {
+    file: 'INV-VEC-8120_vectra_unknown_vendor.pdf',
+    layout: 'meridian',
+    vendor: VENDORS.vectra,
+    invoiceNo: 'VEC/2026/8120',
+    date: '29/10/2026',
+    dueDate: '28/11/2026',
+    poRef: null,
+    poPlacement: null,
+    taxMode: 'cgst_sgst',
+    items: [
+      { desc: 'MCB distribution boards, 8-way, double door', hsn: '8537', qty: 34, uom: 'pcs', rate: 3450.0 },
+      { desc: 'Industrial sockets, 32 A, 5-pin, IP67', hsn: '8536', qty: 120, uom: 'pcs', rate: 640.0 },
+    ],
+    terms: 'New supplier - onboarding documents submitted to procurement separately.',
+    expect: {
+      decision: 'REJECT',
+      because: 'R3 - no vendor on the master matches by GSTIN or name above the floor; R4 also flags as there is no PO',
+    },
+  },
+
+  // --------------------------------------------------- 13. stale invoice date
+  // Dated well outside the 180-day staleness limit, as a bill that surfaced
+  // late genuinely would be. Everything else is clean - the amount is under
+  // PO-4478 and nothing has been billed against it - so R8 fires alone.
+  {
+    file: 'INV-NL-094_nalanda_stale_date.pdf',
+    layout: 'nalanda',
+    vendor: VENDORS.nalanda,
+    invoiceNo: 'NL/2026/094',
+    date: '10/03/2026',
+    dueDate: '09/04/2026',
+    poRef: 'PO-4478',
+    poPlacement: 'remarks',
+    taxMode: 'inclusive',
+    items: [
+      {
+        desc:
+          'Exhibition collateral - 6 roll-up standees, 2 backdrop panels and 1,500 leaflets, ' +
+          'including artwork adaptation and freight to the Chennai venue',
+        hsn: '4911',
+        qty: 1,
+        uom: 'lot',
+        rate: 93000.0,
+      },
+    ],
+    terms:
+      'Rates inclusive of GST at 18%. Submitted late against PO-4478; original bill was ' +
+      'handed over at the venue and not routed through accounts.',
+    expect: {
+      decision: 'FLAG',
+      because: 'R8 - dated 10-03-2026, beyond the 180-day staleness limit, while every other check passes',
+    },
+  },
+
+  // ----------------------------------------- 14. a required field is missing
+  // No invoice number anywhere on the page. R1 grades this a FLAG rather than a
+  // rejection, because the vendor and the total - the two fields you cannot pay
+  // without - are both present. An invoice you cannot reference is a bookkeeping
+  // problem, not a fraud signal, and the severity should say so.
+  {
+    file: 'INV-MER-NONUM_meridian_missing_number.pdf',
+    layout: 'meridian',
+    vendor: VENDORS.meridian,
+    invoiceNo: null,
+    date: '30/10/2026',
+    dueDate: '29/11/2026',
+    poRef: 'PO-4476',
+    poPlacement: 'header',
+    taxMode: 'cgst_sgst',
+    items: [
+      { desc: 'Ergonomic task chairs, mesh back, adjustable arms', hsn: '9401', qty: 85, uom: 'pcs', rate: 2400.0 },
+      { desc: 'Monitor arms, dual, gas spring', hsn: '8302', qty: 46, uom: 'pcs', rate: 1000.0 },
+    ],
+    terms: 'Delivered to the Peenya stores against the running furniture PO.',
+    expect: {
+      decision: 'FLAG',
+      because: 'R1 - no invoice number printed; vendor and total are present, so it flags rather than rejects',
+    },
   },
 ];
 

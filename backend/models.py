@@ -228,6 +228,11 @@ class RunResult(BaseModel):
     # "live" (a real API call), "cache" (same bytes read before) or "fixture"
     # (offline mode). Surfaced in the UI so a run's provenance is never unclear.
     extraction_source: str | None = None
+    # Where the values ultimately came from - "live" or "fixture" - regardless
+    # of how many cache hits sit in between. `extraction_source` answers "did
+    # this run call the API?"; this answers "is this real extraction?", which is
+    # the question the offline-mode honesty claim actually rests on.
+    extraction_origin: str | None = None
     rule_config: dict = Field(default_factory=dict)
 
     stages: list[StageRecord] = Field(default_factory=list)

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30T18:49:47.206Z",
+  "generated_at": "2026-10-31T20:52:15.412Z",
   "note": "True field values of the generated sample invoices, written directly from the generator definitions. Not model output - this is what the documents actually say.",
   "invoices": [
     {
@@ -348,6 +348,192 @@
       "expect": {
         "decision": "FLAG",
         "because": "R2 - line items plus tax come to 3,04,440.00 but the invoice states 2,79,440.00"
+      }
+    },
+    {
+      "file": "INV-ORB-5561_orbit_over_reject.pdf",
+      "layout": "orbit",
+      "scanned": false,
+      "vendor_name": "Orbit Facility Services",
+      "vendor_gstin": "07AAHCO7890E1Z1",
+      "invoice_number": "ORB/2026/5561",
+      "invoice_date": "28/10/2026",
+      "invoice_date_iso": "2026-10-28",
+      "currency": "INR",
+      "po_reference": "PO-4480",
+      "po_placement": "header",
+      "line_items": [
+        {
+          "description": "Annual maintenance contract - HVAC, 12 months",
+          "quantity": 1,
+          "unit_price": 72000,
+          "line_total": 72000
+        },
+        {
+          "description": "Pest control - quarterly cycle",
+          "quantity": 4,
+          "unit_price": 6250,
+          "line_total": 25000
+        },
+        {
+          "description": "Facade cleaning, high-rise rope access",
+          "quantity": 264,
+          "unit_price": 125,
+          "line_total": 33000
+        }
+      ],
+      "subtotal": 130000,
+      "tax_amount": 23400,
+      "total_amount": 153400,
+      "computed_total": 153400,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "REJECT",
+        "because": "R5 - 18.00% over PO-4480, past the 10% reject threshold rather than inside the flag band"
+      }
+    },
+    {
+      "file": "INV-TCE-3310_tricity_blocked_vendor.pdf",
+      "layout": "sharma",
+      "scanned": false,
+      "vendor_name": "Tri-City Electricals",
+      "vendor_gstin": "24AAJCT2345F1Z4",
+      "invoice_number": "TCE/2026/3310",
+      "invoice_date": "23/10/2026",
+      "invoice_date_iso": "2026-10-23",
+      "currency": "INR",
+      "po_reference": null,
+      "po_placement": null,
+      "line_items": [
+        {
+          "description": "LT distribution panel, 415 V, IP54, fully wired",
+          "quantity": 1,
+          "unit_price": 86500,
+          "line_total": 86500
+        },
+        {
+          "description": "Perforated cable tray, GI, 300 mm with couplers",
+          "quantity": 240,
+          "unit_price": 385,
+          "line_total": 92400
+        },
+        {
+          "description": "Installation, termination and load testing",
+          "quantity": 1,
+          "unit_price": 24000,
+          "line_total": 24000
+        }
+      ],
+      "subtotal": 202900,
+      "tax_amount": 36522,
+      "total_amount": 239422,
+      "computed_total": 239422,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "REJECT",
+        "because": "R3 - vendor is on the master but blocked; R4 also flags because a blocked vendor has no open PO"
+      }
+    },
+    {
+      "file": "INV-VEC-8120_vectra_unknown_vendor.pdf",
+      "layout": "meridian",
+      "scanned": false,
+      "vendor_name": "Vectra Switchgear & Controls",
+      "vendor_gstin": "27AABCV7788K1Z2",
+      "invoice_number": "VEC/2026/8120",
+      "invoice_date": "29/10/2026",
+      "invoice_date_iso": "2026-10-29",
+      "currency": "INR",
+      "po_reference": null,
+      "po_placement": null,
+      "line_items": [
+        {
+          "description": "MCB distribution boards, 8-way, double door",
+          "quantity": 34,
+          "unit_price": 3450,
+          "line_total": 117300
+        },
+        {
+          "description": "Industrial sockets, 32 A, 5-pin, IP67",
+          "quantity": 120,
+          "unit_price": 640,
+          "line_total": 76800
+        }
+      ],
+      "subtotal": 194100,
+      "tax_amount": 34938,
+      "total_amount": 229038,
+      "computed_total": 229038,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "REJECT",
+        "because": "R3 - no vendor on the master matches by GSTIN or name above the floor; R4 also flags as there is no PO"
+      }
+    },
+    {
+      "file": "INV-NL-094_nalanda_stale_date.pdf",
+      "layout": "nalanda",
+      "scanned": false,
+      "vendor_name": "Nalanda Print & Packaging",
+      "vendor_gstin": "33AAFCN9012C1Z7",
+      "invoice_number": "NL/2026/094",
+      "invoice_date": "10/03/2026",
+      "invoice_date_iso": "2026-03-10",
+      "currency": "INR",
+      "po_reference": "PO-4478",
+      "po_placement": "remarks",
+      "line_items": [
+        {
+          "description": "Exhibition collateral - 6 roll-up standees, 2 backdrop panels and 1,500 leaflets, including artwork adaptation and freight to the Chennai venue",
+          "quantity": 1,
+          "unit_price": 93000,
+          "line_total": 93000
+        }
+      ],
+      "subtotal": 93000,
+      "tax_amount": null,
+      "total_amount": 93000,
+      "computed_total": 93000,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R8 - dated 10-03-2026, beyond the 180-day staleness limit, while every other check passes"
+      }
+    },
+    {
+      "file": "INV-MER-NONUM_meridian_missing_number.pdf",
+      "layout": "meridian",
+      "scanned": false,
+      "vendor_name": "Meridian Office Supplies LLP",
+      "vendor_gstin": "29AACFM5678B1Z3",
+      "invoice_number": null,
+      "invoice_date": "30/10/2026",
+      "invoice_date_iso": "2026-10-30",
+      "currency": "INR",
+      "po_reference": "PO-4476",
+      "po_placement": "header",
+      "line_items": [
+        {
+          "description": "Ergonomic task chairs, mesh back, adjustable arms",
+          "quantity": 85,
+          "unit_price": 2400,
+          "line_total": 204000
+        },
+        {
+          "description": "Monitor arms, dual, gas spring",
+          "quantity": 46,
+          "unit_price": 1000,
+          "line_total": 46000
+        }
+      ],
+      "subtotal": 250000,
+      "tax_amount": 45000,
+      "total_amount": 295000,
+      "computed_total": 295000,
+      "total_is_misstated": false,
+      "expect": {
+        "decision": "FLAG",
+        "because": "R1 - no invoice number printed; vendor and total are present, so it flags rather than rejects"
       }
     }
   ]

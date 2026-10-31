@@ -212,6 +212,67 @@ SAMPLES: list[dict] = [
         ),
         "order": 9,
     },
+    {
+        "file": "INV-ORB-5561_orbit_over_reject.pdf",
+        "title": "Tolerance boundary, 18% over",
+        "scenario": "over_reject",
+        "expected": "REJECT",
+        "why": (
+            "The far side of R5. Invoice 7 is inside tolerance and invoice 8 sits in the band "
+            "between tolerance and rejection; this one is past the reject threshold, so the same "
+            "rule returns a different severity. Nothing is billed against PO-4480, which keeps "
+            "R6 out of it."
+        ),
+        "order": 10,
+    },
+    {
+        "file": "INV-TCE-3310_tricity_blocked_vendor.pdf",
+        "title": "Vendor on the master but blocked",
+        "scenario": "blocked_vendor",
+        "expected": "REJECT",
+        "why": (
+            "Resolution matches this vendor confidently on GSTIN and then finds the block, which "
+            "is a different stage-4 payload from a vendor nobody can identify. A blocked vendor "
+            "also has no open PO, so R4 flags alongside R3."
+        ),
+        "order": 11,
+    },
+    {
+        "file": "INV-VEC-8120_vectra_unknown_vendor.pdf",
+        "title": "Vendor not on the master at all",
+        "scenario": "unknown_vendor",
+        "expected": "REJECT",
+        "why": (
+            "No GSTIN match and no name above the fuzzy floor, so the vendor cannot be identified "
+            "at all - the contrast case for the blocked vendor above. Paying an unrecognised "
+            "payee is the failure mode R3 exists to prevent."
+        ),
+        "order": 12,
+    },
+    {
+        "file": "INV-NL-094_nalanda_stale_date.pdf",
+        "title": "Invoice surfaced months late",
+        "scenario": "stale_date",
+        "expected": "FLAG",
+        "why": (
+            "Dated beyond the 180-day staleness limit, as a bill that never reached accounts "
+            "genuinely would be. The amount is under its PO and nothing else is wrong, so R8 "
+            "fires on its own."
+        ),
+        "order": 13,
+    },
+    {
+        "file": "INV-MER-NONUM_meridian_missing_number.pdf",
+        "title": "No invoice number printed",
+        "scenario": "missing_number",
+        "expected": "FLAG",
+        "why": (
+            "The invoice number field is blank on the page. R1 grades this a flag rather than a "
+            "rejection because the vendor and the total - the two fields you cannot pay without - "
+            "are both there. An unreferenceable invoice is a bookkeeping problem, not a fraud signal."
+        ),
+        "order": 14,
+    },
 ]
 
 

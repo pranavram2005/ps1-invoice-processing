@@ -244,10 +244,28 @@ class PipelineRun:
                 self.result.file_sha256,
                 exclude_run_id=self.run_id,
             )
+            # A cached *fixture* must never be served into a live run. The bytes
+            # match, so the cache is technically valid - but these values were
+            # never read by a model, and a run labelled anything other than
+            # `fixture` implies they were. Re-reading costs one call and keeps
+            # "live means live" true, which is the whole basis of the claim that
+            # an offline run can never be mistaken for a real one. Offline and
+            # auto modes may reuse it: there, a fixture is what was asked for.
+            if (
+                cached
+                and cached.get("origin") == "fixture"
+                and extract_mod.EXTRACTION_MODE == "live"
+            ):
+                log.info(
+                    "ignoring cached extraction from %s: it came from a fixture and this "
+                    "run is live", cached["run_id"],
+                )
+                cached = None
             if cached:
                 extraction = RawExtraction.model_validate(cached["extraction"])
                 self.result.cached = True
                 self.result.extraction_source = "cache"
+                self.result.extraction_origin = cached.get("origin") or "live"
                 self._model_iso = None
                 db.record_llm_event(
                     run_id=self.run_id, model=extract_mod.EXTRACTION_MODEL,
@@ -260,6 +278,7 @@ class PipelineRun:
                 record.payload = {
                     "cached": True,
                     "source": "cache",
+                    "origin": self.result.extraction_origin,
                     "cache_source_run": cached["run_id"],
                     "extraction": extraction.model_dump(),
                     "note": (
@@ -276,6 +295,7 @@ class PipelineRun:
             source = telemetry.get("source", "live")
             self.result.extraction = extraction
             self.result.extraction_source = source
+            self.result.extraction_origin = source
 
             # Only a real API call belongs in the telemetry table. Recording a
             # fixture run there would put a zero-latency, zero-token row into
