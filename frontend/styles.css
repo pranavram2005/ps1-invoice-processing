@@ -124,16 +124,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; }
 .run-intake > * { min-width: 0; }
 @media (max-width: 860px) { .run-intake { grid-template-columns: 1fr; } }
 
-.dropzone {
-  background: var(--surface); border: 1.5px dashed var(--border-strong);
-  border-radius: var(--radius); padding: 30px 20px; text-align: center;
-  cursor: pointer; transition: border-color .15s, background .15s;
-}
-.dropzone:hover, .dropzone:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
-.dropzone.is-over { border-color: var(--accent); background: var(--accent-soft); }
-.dz-icon { font-size: 30px; line-height: 1; }
-.dz-title { margin-top: 10px; font-weight: 600; }
-.dz-sub { margin-top: 3px; font-size: 12.5px; color: var(--ink-3); }
+/* The dropzone and its parts are defined in the Run tab block at the end of
+   this file - the old rules here were for the previous layout. */
 
 .linkish {
   appearance: none; background: none; border: none; padding: 0; cursor: pointer;
@@ -478,79 +470,111 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-/* ==========================================================================
-   Run tab, rebuilt around one question: pay this or not?
 
-   The previous layout gave most of the first screen to a list of fourteen
-   bundled scenarios - a developer's test menu - while the actual task (drop a
-   PDF) sat in a small box beside it and the answer appeared in a strip below
-   the fold. Same features, inverted hierarchy: the intake is the whole screen
-   until there is a run, then the verdict is the whole screen, with the
-   seven-stage detail one disclosure away.
+/* ==========================================================================
+   Run tab, second pass - built on how document-processing tools actually
+   present this work.
+
+   Three patterns taken from the research and applied here:
+
+   1. A *phase tracker*, not a progress bar. Upload UIs that show one spinner
+      read as stalled the moment a single step runs long - and extraction here
+      takes 4-40 seconds depending on provider, several times its neighbours.
+      Named phases make a slow step legible instead of worrying.
+   2. The *document beside the data*. Every serious extraction tool puts the
+      source page next to what was read off it, because the first thing a
+      reviewer does is check one against the other.
+   3. *Format guidance on the dropzone* - what it takes, how big, and the fact
+      that scans are fine, stated before the attempt rather than after it.
    ========================================================================== */
 
 /* ---------------------------------------------------------------- intake --- */
 
 .intake {
-  max-width: 560px;
-  margin: 72px auto 96px;
+  max-width: 580px;
+  margin: 84px auto 110px;
   text-align: center;
 }
 
 .intake-h {
-  font-size: 30px;
-  letter-spacing: -0.02em;
-  margin: 0 0 8px;
+  font-size: 33px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  margin: 0 0 10px;
 }
 
 .intake-sub {
   color: var(--ink-3);
   font-size: 15px;
-  line-height: 1.55;
-  margin: 0 0 32px;
+  line-height: 1.6;
+  margin: 0 auto 34px;
+  max-width: 460px;
 }
 
 .dropzone {
+  position: relative;
   background: var(--surface);
   border: 1.5px dashed var(--border-strong);
-  border-radius: 14px;
-  padding: 52px 24px;
+  border-radius: 16px;
+  padding: 58px 24px 52px;
   cursor: pointer;
-  transition: border-color .15s, background .15s, transform .15s;
+  transition: border-color .16s, background .16s, box-shadow .16s;
 }
 
 .dropzone:hover,
 .dropzone:focus-visible {
   border-color: var(--accent);
   background: var(--accent-soft);
+  box-shadow: 0 6px 24px -12px rgba(58, 79, 184, .45);
   outline: none;
 }
 
 .dropzone.is-over {
   border-color: var(--accent);
+  border-style: solid;
   background: var(--accent-soft);
-  transform: scale(1.01);
+  box-shadow: 0 8px 30px -12px rgba(58, 79, 184, .55);
 }
 
 .dz-icon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   color: var(--accent);
-  margin: 0 auto 14px;
+  margin: 0 auto 16px;
   display: block;
 }
 
-.dz-title { font-size: 17px; font-weight: 600; }
-.dz-sub   { font-size: 14px; color: var(--ink-3); margin-top: 5px; }
+.dz-title { font-size: 17.5px; font-weight: 600; letter-spacing: -0.01em; }
+.dz-sub   { font-size: 14px; color: var(--ink-3); margin-top: 6px; }
+
+.dz-hint {
+  font-size: 12px;
+  color: var(--ink-4);
+  margin-top: 18px;
+}
 
 /* The scenario picker: one control, not fourteen rows. */
-.try { margin-top: 30px; }
+.try { margin-top: 34px; }
 
-.try-label {
-  display: block;
-  font-size: 13px;
-  color: var(--ink-3);
-  margin-bottom: 9px;
+.try-rule {
+  position: relative;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.try-rule::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  border-top: 1px solid var(--border);
+}
+
+.try-rule span {
+  position: relative;
+  background: var(--bg);
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--ink-4);
 }
 
 .try-row { display: flex; gap: 8px; }
@@ -564,7 +588,7 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
-  padding: 9px 11px;
+  padding: 10px 11px;
 }
 
 .select:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
@@ -574,19 +598,19 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   line-height: 1.55;
   color: var(--ink-3);
   text-align: left;
-  margin: 11px 2px 0;
+  margin: 12px 2px 0;
   min-height: 2.6em;
 }
 
 /* ---------------------------------------------------------------- result --- */
 
-.result { max-width: 840px; margin: 28px auto 80px; }
+.result { max-width: 1080px; margin: 26px auto 80px; }
 
 .result-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 
 .result-file {
@@ -604,53 +628,93 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 
 .btn-sm { font-size: 12px; padding: 5px 10px; }
 
-/* ----- in-flight -----------------------------------------------------------
-   Seven stage rows are the audit trail, not a progress indicator. While the
-   run executes this says, in one line, what is happening. */
+/* ----- phase tracker ------------------------------------------------------- */
 
-.working {
+.tracker {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 16px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 13px;
-  padding: 26px 24px 22px;
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0 15px;
-  align-items: center;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
 }
 
-.working-spin {
-  width: 21px;
-  height: 21px;
-  border: 2.5px solid var(--accent-soft);
-  border-top-color: var(--accent);
+.ph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  position: relative;
+  text-align: center;
+}
+
+/* the connector between phases */
+.ph::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: calc(-50% + 13px);
+  right: calc(50% + 13px);
+  height: 2px;
+  background: var(--border);
+}
+
+.ph:first-child::before { display: none; }
+.ph.is-done::before,
+.ph.is-skipped::before { background: var(--approve); }
+
+.ph-dot {
+  width: 23px;
+  height: 23px;
   border-radius: 50%;
-  animation: spin .75s linear infinite;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 650;
+  background: var(--bg);
+  border: 1.5px solid var(--border-strong);
+  color: var(--ink-4);
+  transition: background .2s, border-color .2s, color .2s;
+}
+
+.ph.is-done .ph-dot {
+  background: var(--approve);
+  border-color: var(--approve);
+  color: #fff;
+}
+
+.ph.is-skipped .ph-dot {
+  background: var(--surface);
+  border-color: var(--approve);
+  color: var(--approve);
+}
+
+.ph.is-failed .ph-dot {
+  background: var(--reject);
+  border-color: var(--reject);
+  color: #fff;
+}
+
+.ph.is-running .ph-dot {
+  border-color: var(--accent);
+  border-top-color: transparent;
+  background: var(--surface);
+  animation: spin .7s linear infinite;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.working-text { display: flex; flex-direction: column; gap: 3px; }
-.working-text strong { font-size: 15px; font-weight: 600; }
-.working-text span   { font-size: 12.5px; color: var(--ink-4); }
-
-.working-bar {
-  grid-column: 1 / -1;
-  margin-top: 18px;
-  height: 4px;
-  background: var(--border);
-  border-radius: 2px;
-  overflow: hidden;
+.ph-name {
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--ink-4);
 }
 
-.working-bar i {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width .35s ease;
-}
+.ph.is-running .ph-name { color: var(--accent-ink); font-weight: 600; }
+.ph.is-done .ph-name    { color: var(--ink-2); }
 
 /* ----- the answer ---------------------------------------------------------- */
 
@@ -663,6 +727,7 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   border-left-width: 4px;
   border-radius: 13px;
   background: var(--surface);
+  margin-bottom: 18px;
 }
 
 .verdict.is-approve { border-left-color: var(--approve); background: var(--approve-bg); }
@@ -700,9 +765,9 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 .is-reject  .v-word { color: var(--reject); }
 
 .v-line {
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 650;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   line-height: 1.25;
   margin-bottom: 7px;
 }
@@ -721,24 +786,67 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   padding: 4px 11px;
 }
 
+/* ----- document beside data ------------------------------------------------ */
+
+.panes {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.pane {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pane-head {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.docview { height: 560px; background: var(--surface-2); }
+
+.docview iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.pane-data { background: none; border: 0; border-radius: 0; }
+
+.pane-data > .pane-head {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+  border-bottom: 0;
+}
+
 /* ----- the four facts ------------------------------------------------------ */
 
 .facts {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1px;
   background: var(--border);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-top: 16px;
+  border-top: 0;
 }
 
-.fact { background: var(--surface); padding: 15px 17px; min-width: 0; }
+.fact { background: var(--surface); padding: 14px 17px; min-width: 0; }
 
 .fact-k {
-  font-size: 11px;
-  letter-spacing: .06em;
+  font-size: 10.5px;
+  letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--ink-4);
   margin-bottom: 5px;
@@ -756,26 +864,28 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 .checks {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 19px 21px;
-  margin-top: 16px;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  padding: 17px 19px;
 }
+
+.checks:empty { display: none; }
 
 .checks-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 13px;
+  margin-bottom: 11px;
 }
 
-.checks-head h3 { font-size: 15px; margin: 0; }
-.checks-count   { font-size: 12.5px; color: var(--ink-4); }
+.checks-head h3 { font-size: 14px; margin: 0; }
+.checks-count   { font-size: 12px; color: var(--ink-4); }
 
 .check-list { list-style: none; margin: 0; padding: 0; }
 
 .check {
   display: flex;
-  gap: 11px;
+  gap: 10px;
   align-items: flex-start;
   padding: 10px 0;
   border-top: 1px solid var(--border);
@@ -785,12 +895,12 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 
 .check-mark {
   flex: none;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
   margin-top: 1px;
@@ -801,15 +911,15 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 .check.is-skip .check-mark { background: var(--ink-4); }
 
 .check-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.check-name { font-size: 14px; font-weight: 550; }
+.check-name { font-size: 13.5px; font-weight: 550; }
 
 .check-detail,
-.check-cmp { font-size: 13px; line-height: 1.5; color: var(--ink-3); }
+.check-cmp { font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
 
 .check-cmp b {
   font-weight: 600;
   color: var(--ink-4);
-  font-size: 11px;
+  font-size: 10.5px;
   letter-spacing: .05em;
   text-transform: uppercase;
 }
@@ -817,24 +927,24 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 .check-id {
   flex: none;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--ink-4);
   padding-top: 2px;
 }
 
-.checks-rest { margin-top: 4px; }
+.checks-rest { margin-top: 2px; }
 
 .checks-rest > summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--accent);
-  padding: 9px 0 3px;
+  padding: 9px 0 2px;
   list-style: none;
 }
 
 .checks-rest > summary::-webkit-details-marker { display: none; }
-.checks-rest > summary::before { content: '> '; }
-.checks-rest[open] > summary::before { content: 'v '; }
+.checks-rest > summary::before { content: '+ '; }
+.checks-rest[open] > summary::before { content: '- '; }
 
 /* ----- the graded detail, available but not in the way --------------------- */
 
@@ -857,8 +967,8 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 }
 
 .detail > summary::-webkit-details-marker { display: none; }
-.detail > summary::before { content: '>'; color: var(--ink-4); }
-.detail[open] > summary::before { content: 'v'; }
+.detail > summary::before { content: '+'; color: var(--ink-4); font-weight: 400; }
+.detail[open] > summary::before { content: '-'; }
 
 .detail-note { font-size: 12.5px; font-weight: 400; color: var(--ink-4); }
 
@@ -907,14 +1017,20 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 
 .provider button:disabled { opacity: .45; cursor: not-allowed; }
 
+@media (max-width: 960px) {
+  .panes { grid-template-columns: 1fr; }
+  .docview { height: 420px; }
+}
+
 @media (max-width: 720px) {
-  .facts { grid-template-columns: repeat(2, 1fr); }
-  .intake { margin: 44px auto 60px; }
+  .intake { margin: 46px auto 64px; }
+  .intake-h { font-size: 26px; }
   .v-line { font-size: 18px; }
+  .tracker { grid-template-columns: repeat(4, 1fr); row-gap: 14px; }
+  .ph::before { display: none; }
 }
 
 /* The `hidden` attribute sets display:none at the lowest precedence, so any
-   component with its own display rule (.working is grid, .facts is grid,
-   .verdict is flex) silently ignores it. This is the fix every such codebase
-   eventually needs. */
+   component with its own display rule (.panes is grid, .verdict is flex)
+   silently ignores it. */
 [hidden] { display: none !important; }

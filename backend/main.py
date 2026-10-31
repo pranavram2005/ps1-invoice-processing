@@ -291,14 +291,29 @@ def delete_run(run_id: str) -> dict:
 
 
 @app.get("/api/runs/{run_id}/file")
-def get_run_file(run_id: str) -> FileResponse:
+def get_run_file(run_id: str, download: bool = False) -> FileResponse:
+    """The stored PDF.
+
+    Served **inline** by default so the UI can embed it beside the extracted
+    fields. Passing `filename=` to FileResponse would set
+    `Content-Disposition: attachment`, which makes a browser download the file
+    rather than render it - fine for a download link, fatal for an <iframe>.
+    `?download=1` asks for that behaviour explicitly.
+    """
     run = db.get_run(run_id)
     if run is None:
         raise HTTPException(404, f"run {run_id} not found")
     path = pipeline.blob_path(run.file_sha256)
     if not path.exists():
         raise HTTPException(404, "stored PDF not found")
-    return FileResponse(str(path), media_type="application/pdf", filename=run.filename)
+    if download:
+        return FileResponse(str(path), media_type="application/pdf", filename=run.filename)
+    safe = run.filename.replace('"', "")
+    return FileResponse(
+        str(path),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{safe}"'},
+    )
 
 
 def _sse(event: str, data: dict) -> str:

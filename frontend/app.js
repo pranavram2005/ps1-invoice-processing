@@ -309,10 +309,8 @@
     $('#run-filename').textContent = filename || runId;
     $('#run-meta').innerHTML = '';
     $('#decision').hidden = true;
-    $('#run-facts').hidden = true;
-    $('#run-checks').hidden = true;
+    $('#run-panes').hidden = true;
     $('#run-detail').hidden = true;
-    $('#run-working').hidden = false;
     updateWorking();
     renderTimeline();
     showTab('run');
@@ -378,8 +376,8 @@
       state.stages = run.stages || [];
       state.openStages.clear();
       showResultView(true);
-      $('#run-working').hidden = true;
       $('#run-filename').textContent = run.filename;
+      updateWorking();
       renderRunMeta(run);
       renderTimeline();
       renderDecision(run);
@@ -793,29 +791,47 @@
     $('#run-result').hidden = !on;
   }
 
-  const STAGE_VERB = {
-    1: 'Reading the file…',
-    2: 'Extracting the fields…',
-    3: 'Checking every figure against the document…',
-    4: 'Looking up the vendor…',
-    5: 'Finding the purchase order…',
-    6: 'Running the checks…',
-    7: 'Deciding…',
-  };
+  // Short names for the tracker. The stage rows keep the precise engineering
+  // labels; these are what a reviewer reads while waiting.
+  const PHASES = [
+    'Read file', 'Extract', 'Verify', 'Vendor', 'Match PO', 'Check rules', 'Decide',
+  ];
 
-  /** Plain-language progress. The stage timeline still exists; this is the
-   *  version for someone who does not want to read seven rows to learn that
-   *  the thing is still working. */
+  /** The phase tracker.
+   *
+   *  Upload UIs that show only a spinner get read as stalled the moment one
+   *  step takes longer than the others - and extraction here takes 4-40s
+   *  depending on provider, far longer than its neighbours. Naming the phases
+   *  and marking which one is live makes a slow step legible instead of
+   *  worrying.
+   */
   function updateWorking() {
+    const node = $('#tracker');
+    if (!node) return;
+    const bySeq = new Map(state.stages.map((s) => [s.seq, s]));
+    node.innerHTML = PHASES.map((name, i) => {
+      const stage = bySeq.get(i + 1);
+      const status = stage ? stage.status : 'pending';
+      const mark = status === 'done' ? '✓'
+        : status === 'failed' ? '✕'
+        : status === 'skipped' ? '–'
+        : status === 'running' ? '' : i + 1;
+      return `<li class="ph is-${esc(status)}">
+        <span class="ph-dot">${mark}</span>
+        <span class="ph-name">${esc(name)}</span>
+      </li>`;
+    }).join('');
     const done = state.stages.filter((s) => ['done', 'failed', 'skipped'].includes(s.status)).length;
-    const running = state.stages.find((s) => s.status === 'running');
-    const seq = running ? running.seq : Math.min(done + 1, 7);
-    const verb = $('#working-stage');
-    const step = $('#working-step');
-    const fill = $('#working-fill');
-    if (verb) verb.textContent = STAGE_VERB[seq] || 'Working…';
-    if (step) step.textContent = `step ${Math.min(seq, 7)} of 7`;
-    if (fill) fill.style.width = `${Math.round((done / 7) * 100)}%`;
+    node.style.setProperty('--progress', `${Math.round((done / PHASES.length) * 100)}%`);
+  }
+
+  /** The document itself, beside what was read off it. */
+  function renderDocView(run) {
+    const node = $('#docview');
+    if (!node || !run || !run.run_id) return;
+    const url = `/api/runs/${encodeURIComponent(run.run_id)}/file`;
+    node.innerHTML = `<iframe src="${esc(url)}#toolbar=0&navpanes=0&view=FitH"
+                        title="The invoice PDF" loading="lazy"></iframe>`;
   }
 
   const VERDICT_COPY = {
@@ -839,7 +855,6 @@
   function renderDecision(run) {
     const node = $('#decision');
     const decision = run.decision;
-    $('#run-working').hidden = true;
 
     if (!decision) {
       if (run.status === 'failed') {
@@ -876,6 +891,8 @@
 
     renderFacts(run);
     renderChecks(run);
+    renderDocView(run);
+    $('#run-panes').hidden = false;
     $('#run-detail').hidden = false;
   }
 
@@ -893,7 +910,6 @@
       ['Amount', money],
       ['Purchase order', po.matched ? po.po_number : 'none matched'],
     ];
-    node.hidden = false;
     node.innerHTML = cells.map(([k, v]) => `
       <div class="fact">
         <div class="fact-k">${esc(k)}</div>
@@ -905,7 +921,7 @@
   function renderChecks(run) {
     const node = $('#run-checks');
     const rules = run.rules || [];
-    if (!rules.length) { node.hidden = true; return; }
+    if (!rules.length) { node.innerHTML = ''; return; }
 
     // A rule is skipped, passed, or failed - in that order of precedence,
     // because a skipped rule also reports passed=true and must not be counted
@@ -931,7 +947,6 @@
       </li>`;
     };
 
-    node.hidden = false;
     node.innerHTML = `
       <div class="checks-head">
         <h3>What was checked</h3>

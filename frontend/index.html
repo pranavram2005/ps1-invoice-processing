@@ -36,62 +36,67 @@
   <!-- ==================================================== RUN ============ -->
   <section class="panel is-active" id="panel-run">
 
-    <!-- State 1: nothing running. One obvious action. -->
+    <!-- State 1: nothing running. The upload is the page. -->
     <div class="intake" id="run-intake">
       <h2 class="intake-h">Check an invoice</h2>
-      <p class="intake-sub">Drop in a vendor PDF. You get back approve, flag or reject -
-         and the reason behind it.</p>
+      <p class="intake-sub">Drop in a vendor PDF. You get back approve, flag or reject,
+         with the reason behind it and every figure traced to the page it came from.</p>
 
       <div class="dropzone" id="dropzone" tabindex="0" role="button"
            aria-label="Drop an invoice PDF here or click to choose a file">
         <svg class="dz-icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
-                fill="none" stroke="currentColor" stroke-width="1.6"
+                fill="none" stroke="currentColor" stroke-width="1.7"
                 stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <div class="dz-title">Drop a PDF here</div>
-        <div class="dz-sub">or <button class="linkish" id="browse-btn" type="button">choose a file</button></div>
+        <div class="dz-title">Drop your invoice here</div>
+        <div class="dz-sub">or <button class="linkish" id="browse-btn" type="button">browse files</button></div>
+        <div class="dz-hint">PDF · up to 20 MB · scanned pages are fine</div>
         <input type="file" id="file-input" accept="application/pdf" hidden>
       </div>
 
       <div class="try">
-        <label class="try-label" for="sample-select">No invoice handy? Try a prepared one</label>
+        <div class="try-rule"><span>or try a prepared invoice</span></div>
         <div class="try-row">
-          <select id="sample-select" class="select"></select>
-          <button class="btn btn-primary" id="sample-run" type="button">Run it</button>
+          <select id="sample-select" class="select" aria-label="Prepared invoice"></select>
+          <button class="btn btn-primary" id="sample-run" type="button">Run</button>
         </div>
         <p class="try-why" id="sample-why"></p>
       </div>
     </div>
 
-    <!-- State 2: a run is in flight or finished. The verdict is the hero. -->
+    <!-- State 2: processing, then the answer. -->
     <div class="result" id="run-result" hidden>
 
       <div class="result-bar">
-        <button class="btn btn-ghost" id="back-btn" type="button">&larr; Check another</button>
+        <button class="btn btn-ghost" id="back-btn" type="button">&larr; New invoice</button>
         <div class="result-file" id="run-filename">—</div>
         <div class="result-actions">
-          <button class="btn btn-ghost" id="view-pdf-btn" type="button">View PDF</button>
+          <button class="btn btn-ghost" id="view-pdf-btn" type="button">Open PDF</button>
           <button class="btn btn-ghost" id="replay-btn" type="button">Re-run</button>
         </div>
       </div>
 
-      <!-- while the pipeline is still executing -->
-      <div class="working" id="run-working">
-        <div class="working-spin" aria-hidden="true"></div>
-        <div class="working-text">
-          <strong id="working-stage">Reading the document…</strong>
-          <span id="working-step">step 1 of 7</span>
-        </div>
-        <div class="working-bar"><i id="working-fill"></i></div>
-      </div>
+      <!-- Phase tracker. The research point: show progress across named phases,
+           not bytes, so a slow stage never reads as a stall. -->
+      <ol class="tracker" id="tracker" aria-label="Processing stages"></ol>
 
       <!-- the answer -->
       <div class="verdict" id="decision" hidden></div>
 
-      <div class="facts" id="run-facts" hidden></div>
-
-      <div class="checks" id="run-checks" hidden></div>
+      <!-- The document beside what was read off it - the pattern every serious
+           document-processing tool converges on. -->
+      <div class="panes" id="run-panes" hidden>
+        <div class="pane pane-doc">
+          <div class="pane-head">Document</div>
+          <div class="docview" id="docview"></div>
+        </div>
+        <div class="pane pane-data">
+          <div class="pane-head">What was read from it</div>
+          <div class="facts" id="run-facts"></div>
+          <div class="checks" id="run-checks"></div>
+        </div>
+      </div>
 
       <!-- graded detail, one click away rather than in the way -->
       <details class="detail" id="run-detail" hidden>
