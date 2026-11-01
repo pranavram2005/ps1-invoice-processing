@@ -433,12 +433,19 @@ def get_thumb(name: str) -> FileResponse:
 
 
 @app.get("/api/samples/{name}/file")
-def get_sample_file(name: str) -> FileResponse:
-    """A bundled sample PDF, served inline so the Layouts tab can show it."""
+def get_sample_file(name: str, download: bool = False) -> FileResponse:
+    """A bundled sample PDF.
+
+    Inline by default so the Layouts tab can show it; `?download=1` hands it
+    over as a file, so anyone on the deployed URL can get a real invoice to
+    upload without cloning the repository.
+    """
     safe = Path(name).name
     path = SAMPLE_INVOICE_DIR / safe
     if path.suffix.lower() != ".pdf" or not path.exists():
         raise HTTPException(404, f"sample '{safe}' not found")
+    if download:
+        return FileResponse(str(path), media_type="application/pdf", filename=safe)
     return FileResponse(
         str(path),
         media_type="application/pdf",

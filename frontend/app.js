@@ -267,9 +267,15 @@
       .map((s) => `<option value="${esc(s.file)}">${esc(s.title)} — expects ${esc(s.expected)}</option>`)
       .join('');
 
+    // Also offer the file itself. Someone evaluating this from a deployed URL
+    // has no repository to dig a test PDF out of, and "upload an invoice" is a
+    // hard instruction to follow with no invoice to hand.
     const describe = () => {
       const picked = state.samples[select.selectedIndex];
-      why.textContent = picked ? picked.why : '';
+      if (!picked) { why.textContent = ''; return; }
+      why.innerHTML = `${esc(picked.why)}
+        <a class="dl" href="/api/samples/${encodeURIComponent(picked.file)}/file?download=1"
+           download>Download this PDF</a>`;
     };
     select.addEventListener('change', describe);
     describe();

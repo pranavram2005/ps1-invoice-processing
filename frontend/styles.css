@@ -2013,6 +2013,21 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 .ca-cands b { text-align: right; font-variant-numeric: tabular-nums; }
 
 
+
+.dl {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--accent-ink);
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-soft);
+  white-space: nowrap;
+}
+
+.dl::before { content: '93 a0'; }
+.dl:hover { border-bottom-color: var(--accent); }
+
+
 /* The `hidden` attribute sets display:none at the lowest precedence, so any
    component with its own display rule (.panes is grid, .verdict is flex)
    silently ignores it. */
