@@ -254,23 +254,48 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
 }
-.stage { border-bottom: 1px solid var(--border); }
-.stage:last-child { border-bottom: none; }
+/* The seven stages read as a pipeline, not a list of cards: a hairline rail
+   joins the status marks top to bottom so the order is structural rather than
+   something you infer from the numbering. The rail runs behind the marks and
+   each mark punches a hole in it with a ring of the panel's own background. */
+
+.timeline { position: relative; }
+
+.stage { position: relative; }
+.stage + .stage { border-top: 1px solid var(--border); }
+
+.stage:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 29px;
+  top: 30px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.stage.is-pending::before { background: repeating-linear-gradient(
+  to bottom, var(--border) 0 3px, transparent 3px 6px); }
 
 .stage-row {
-  display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+  display: flex; align-items: flex-start; gap: 14px; padding: 15px 16px;
   cursor: pointer; width: 100%; appearance: none; background: none;
   border: none; font: inherit; text-align: left;
+  transition: background .12s;
 }
 .stage-row:hover { background: var(--surface-2); }
+.stage.is-open > .stage-row { background: var(--surface-2); }
 .stage.is-pending .stage-row { cursor: default; }
-.stage.is-pending { opacity: .5; }
+.stage.is-pending { opacity: .55; }
 
 .stage-mark {
-  width: 24px; height: 24px; border-radius: 50%; flex: none;
+  width: 27px; height: 27px; border-radius: 50%; flex: none;
   display: grid; place-items: center; font-size: 11.5px; font-weight: 600;
   background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--ink-3);
+  box-shadow: 0 0 0 4px var(--surface);   /* punches the rail */
+  position: relative; z-index: 1;
 }
+.stage.is-open > .stage-row .stage-mark { box-shadow: 0 0 0 4px var(--surface-2); }
 .stage.is-done .stage-mark    { background: var(--approve-bg); border-color: var(--approve-br); color: var(--approve); }
 .stage.is-failed .stage-mark  { background: var(--reject-bg);  border-color: var(--reject-br);  color: var(--reject); }
 .stage.is-skipped .stage-mark { background: var(--surface-2);  color: var(--ink-4); }
@@ -287,30 +312,59 @@ main { max-width: 1180px; margin: 0 auto; padding: 24px; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.stage-main { flex: 1; min-width: 0; }
-.stage-label { font-size: 13.5px; font-weight: 500; }
-.stage-summary { font-size: 12px; color: var(--ink-3); margin-top: 1.5px; }
+.stage-main { flex: 1; min-width: 0; padding-top: 2px; }
+.stage-label { font-size: 14px; font-weight: 550; letter-spacing: -.012em; display: block; }
+.stage-summary {
+  font-size: 12.4px; color: var(--ink-3); margin-top: 4px;
+  line-height: 1.5; display: block;
+}
 .stage.is-failed .stage-summary { color: var(--reject); }
-.stage-right { display: flex; align-items: center; gap: 9px; flex: none; }
-.stage-time { font-size: 11px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+
+.stage-right { display: flex; align-items: center; gap: 10px; flex: none; padding-top: 3px; }
+
+/* Duration as a mono pill: it is a measurement, and setting it in the mono
+   face stops seven different widths from making the right edge ragged. */
+.stage-time {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.stage.is-open > .stage-row .stage-time { background: var(--surface); }
+.stage-time:empty { display: none; }
+
 .caret { font-size: 9px; color: var(--ink-4); transition: transform .15s; }
 .stage.is-open .caret { transform: rotate(90deg); }
 
-.stage-body { display: none; padding: 2px 16px 16px 52px; }
+.stage-body {
+  display: none;
+  padding: 4px 18px 22px 57px;
+  position: relative;
+}
 .stage.is-open .stage-body { display: block; }
-@media (max-width: 700px) { .stage-body { padding-left: 16px; } }
+@media (max-width: 700px) { .stage-body { padding-left: 18px; } }
 
 /* ------------------------------------------------------- payload internals */
 
-.kv { display: grid; grid-template-columns: minmax(130px, auto) 1fr; gap: 3px 14px; font-size: 12.5px; }
+.kv { display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: 6px 18px; font-size: 12.5px; }
 .kv dt { color: var(--ink-3); }
 .kv dd { margin: 0; word-break: break-word; }
 .kv dd .mono { font-family: var(--mono); font-size: 11.5px; }
 
-.sub { margin-top: 14px; }
+.sub { margin-top: 20px; }
+
+/* Each block inside a stage gets a labelled hairline, so a long stage body
+   reads as a few named sections rather than one undifferentiated dump. */
 .sub-title {
-  font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--ink-4); margin-bottom: 6px;
+  font-size: 10px; font-weight: 600; letter-spacing: .085em; text-transform: uppercase;
+  color: var(--ink-4); margin-bottom: 9px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
 }
 .note {
   font-size: 12px; color: var(--ink-2); background: var(--surface-2);
@@ -328,7 +382,12 @@ table.mini th {
 }
 table.mini td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
 table.mini tr:last-child td { border-bottom: none; }
-table.mini td.num, table.mini th.num { text-align: right; padding-right: 0; }
+table.mini td.num, table.mini th.num { text-align: right; }
+/* Flush only the trailing numeric column with the table edge. Applying this to
+   every .num cell collapsed the gap after mid-table numbers, which ran the
+   provenance table's one-digit Page column straight into the quote beside it
+   ("PAGEQUOTED TEXT", "1Meridian Office Supplies LLP"). */
+table.mini td.num:last-child, table.mini th.num:last-child { padding-right: 0; }
 
 /* provenance marker: hover a field to see where it was read from */
 .prov {
@@ -413,23 +472,57 @@ table.mini td.num, table.mini th.num { text-align: right; padding-right: 0; }
 
 /* ------------------------------------------------------------------ tiles */
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
-         gap: 10px; margin-bottom: 20px; }
-.tiles-sm { margin-bottom: 14px; }
-.tile {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 13px 15px;
+/* One figure row, not a grid of boxes.
+
+   zamp.ai states its numbers on hairline-divided rows in light weights with a
+   lot of air around them - it never fences each figure in its own bordered
+   card. So a tile is a cell inside one surface, separated by a rule, and the
+   value is set at weight 400 with tight negative tracking to match their
+   display type. This is the same treatment as the purchase-order budget panel,
+   which is the point: every page states a figure the same way. */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 8px;
+  margin-bottom: 24px;
 }
-.tile-label { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
-              color: var(--ink-4); font-weight: 600; }
-.tile-value { font-size: 23px; font-weight: 600; margin-top: 4px; letter-spacing: -.02em;
-              font-variant-numeric: tabular-nums; }
-.tile-sub { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.tiles-sm { margin-bottom: 14px; padding: 16px 6px; }
+
+.tile {
+  padding: 2px 22px;
+  border-left: 1px solid var(--border);
+  background: none;
+}
+/* The first cell of each wrapped row loses its divider. Without this the rule
+   reappears at the left edge whenever the grid wraps. */
+.tile:first-child { border-left: 0; }
+
+.tile-label {
+  font-size: 10px; letter-spacing: .085em; text-transform: uppercase;
+  color: var(--ink-4); font-weight: 600;
+}
+.tile-value {
+  font-size: 29px; font-weight: 400; margin: 5px 0 4px; letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums; line-height: 1.05;
+}
+.tiles-sm .tile-value { font-size: 23px; }
+.tile-sub { font-size: 11.5px; color: var(--ink-3); line-height: 1.45; }
+
 .tile.is-approve .tile-value { color: var(--approve); }
 .tile.is-flag .tile-value    { color: var(--flag); }
 .tile.is-reject .tile-value  { color: var(--reject); }
-.tile.is-hero { background: var(--accent-soft); border-color: #d4daf5; }
-.tile.is-hero .tile-value { color: var(--accent-ink); }
+.tile.is-hero .tile-value    { color: var(--accent-ink); }
+.tile.is-hero .tile-label    { color: var(--accent); }
+
+@media (max-width: 760px) {
+  .tiles { grid-template-columns: 1fr 1fr; padding: 18px 6px; }
+  .tile { padding: 10px 16px; }
+}
 
 /* ------------------------------------------------------------------ tables */
 
@@ -1787,20 +1880,268 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
    totals first, rows ordered by how spent each budget is, and each row opening
    onto the invoices that consumed it. */
 
-.pos-summary {
+/* ----- the commitment position --------------------------------------------
+   Zamp's own pages state figures on hairline-divided rows in light weights
+   rather than in a grid of bordered boxes, so this follows that: one ring for
+   the single ratio that matters, the money that composes it beside it, and the
+   per-PO counts as pills. */
+
+.budget {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 26px 34px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 26px 30px;
+  margin-bottom: 26px;
+}
+
+.budget-ring { position: relative; width: 128px; height: 128px; flex: none; }
+.budget-ring svg { width: 100%; height: 100%; display: block; }
+
+.ring-track { fill: none; stroke: var(--surface-2); stroke-width: 13; }
+.ring-fill {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 13;
+  stroke-linecap: round;
+  transition: stroke-dasharray .5s ease;
+}
+
+.ring-mid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.ring-mid b {
+  font-size: 27px;
+  font-weight: 400;          /* zamp.ai sets its large figures at 400, not 600 */
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ring-mid b span { font-size: 14px; color: var(--ink-3); margin-left: 1px; }
+.ring-cap {
+  font-size: 9.5px;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  font-weight: 600;
+}
+
+/* The three money figures, divided by hairlines rather than boxed. */
+.budget-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0;
+}
+
+.bfig { padding: 2px 24px; border-left: 1px solid var(--border); }
+.bfig:first-child { border-left: 0; padding-left: 0; }
+
+.bfig-k {
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  font-weight: 600;
+}
+.bfig-v {
+  font-size: 29px;
+  font-weight: 400;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+  margin: 5px 0 4px;
+  line-height: 1.05;
+  white-space: nowrap;
+  cursor: help;
+}
+.bfig-s { font-size: 11.5px; color: var(--ink-3); line-height: 1.45; }
+
+.budget-flags {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 28px;
-  padding: 14px 2px 18px;
+  gap: 7px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.bflag {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  padding: 4px 13px;
+}
+.bflag b { font-weight: 600; color: var(--ink); margin-right: 3px; }
+.bflag.is-over { background: var(--reject-bg); border-color: var(--reject-br); color: var(--reject); }
+.bflag.is-over b { color: var(--reject); }
+.bflag.is-near { background: var(--flag-bg); border-color: var(--flag-br); color: var(--flag); }
+.bflag.is-near b { color: var(--flag); }
+.bflag.is-ok { background: var(--approve-bg); border-color: var(--approve-br); color: var(--approve); }
+.bflag.is-ok b { color: var(--approve); }
+
+@media (max-width: 760px) {
+  .budget { grid-template-columns: 1fr; justify-items: start; }
+  .bfig { border-left: 0; padding: 10px 0; border-top: 1px solid var(--border); }
+  .bfig:first-child { border-top: 0; padding-top: 0; }
+}
+
+/* The controls strip: a search box and the health filters, sitting on the
+   table head so the table reads as the thing being narrowed. */
+.po-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.po-search {
+  font: inherit;
   font-size: 13px;
+  padding: 7px 13px;
+  min-width: 248px;
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  background: var(--surface);
+  color: var(--ink);
+}
+.po-search::placeholder { color: var(--ink-4); }
+.po-search:focus { outline: none; border-color: var(--border-strong); }
+
+/* "Needs attention" - the POs a reviewer would otherwise have to find by
+   scanning the table. Lifting them out is the point of the page. */
+.po-board { margin: 6px 0 30px; }
+
+.po-board-head {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 11px;
+}
+
+.po-board-none {
+  font-size: 13px;
+  color: var(--ink-3);
+  background: var(--approve-bg);
+  border: 1px solid var(--approve-br);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 0;
+}
+
+.po-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: 12px;
+}
+
+.po-alert {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 14px 14px;
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s;
+}
+.po-alert:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+.po-alert:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.po-alert.is-over { border-color: var(--reject-br); background: var(--reject-bg); }
+.po-alert.is-near { border-color: var(--flag-br); background: var(--flag-bg); }
+
+.po-alert-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.po-alert-vendor {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.po-alert .po-meter { width: 100%; }
+.po-alert.is-near .po-meter-fill { background: #d8a008; }
+.po-alert.is-over .po-meter-fill { background: var(--reject); }
+
+.po-alert-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.po-alert-foot b { color: var(--ink); font-weight: 600; }
+
+/* Sortable headers, matching the runs table. */
+.grid-po th[data-posort] { cursor: pointer; user-select: none; white-space: nowrap; }
+.grid-po th[data-posort]:hover { color: var(--ink); }
+.grid-po th.is-sorted { color: var(--ink); }
+.grid-po th.is-sorted::after {
+  content: '';
+  display: inline-block;
+  margin-left: 5px;
+  border: 3.5px solid transparent;
+}
+.grid-po th.is-sorted[data-dir="desc"]::after { border-top-color: currentColor; }
+.grid-po th.is-sorted[data-dir="asc"]::after { border-bottom-color: currentColor; }
+
+/* The row is as tall as the vendor cell, so the meter needs its own middle
+   alignment rather than inheriting the baseline of a three-line neighbour. */
+.grid-po tbody td { vertical-align: middle; }
+.po-consumed { width: 1%; }
+
+.po-vendor-cell { min-width: 20ch; }
+.po-vid { margin-top: 4px; }
+.po-vid code { font-size: 10.5px; color: var(--ink-4); }
+.po-neg { color: var(--reject); }
+
+.po-exp { font-size: 11px; color: var(--ink-4); }
+.po-exp.is-soon { color: var(--flag); font-weight: 600; }
+.po-exp.is-bad { color: var(--reject); font-weight: 600; }
+
+.po-status {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--approve);
+  background: var(--approve-bg);
+  border: 1px solid var(--approve-br);
+  border-radius: var(--pill);
+  padding: 2px 9px;
+}
+.po-ccy { display: block; font-size: 10.5px; color: var(--ink-4); margin-top: 4px; }
+
+.po-src { font-size: 11px; color: var(--ink-4); }
+.po-src.is-live { color: var(--ink-2); }
+
+.po-foot { margin-top: 16px; max-width: 86ch; }
+
+.tile.tile-warn { border-color: var(--reject-br); background: var(--reject-bg); }
+.tile.tile-warn .tile-value { color: var(--reject); }
+
+.po-sub tfoot td {
+  border-top: 1px solid var(--border-strong);
+  padding-top: 7px;
+  font-size: 11.5px;
   color: var(--ink-3);
 }
 
-.pos-summary b {
-  color: var(--ink);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
+.po-main.is-unused .po-tag { background: var(--surface-2); color: var(--ink-4); }
 
 .grid-po tbody tr.po-main { cursor: pointer; }
 .grid-po tbody tr.po-main:hover { background: var(--surface-2); }
@@ -2024,7 +2365,7 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   white-space: nowrap;
 }
 
-.dl::before { content: '93 a0'; }
+.dl::before { content: '\2193\00a0'; }
 .dl:hover { border-bottom-color: var(--accent); }
 
 

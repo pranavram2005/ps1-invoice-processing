@@ -49,29 +49,32 @@ from tenacity import (
 from . import gemini, groq
 from .config import (
     ANTHROPIC_API_KEY,
+    EXTRACTION_CHAIN,
     EXTRACTION_EFFORT,
     EXTRACTION_MODE,
     FIXTURES_PATH,
     active_model,
     active_provider,
+    keys_for,
     model_for,
 )
 from .models import LineItem, Provenance, RawExtraction
 
 log = logging.getLogger("extract")
 
-_client: anthropic.Anthropic | None = None
+_clients: dict[str, anthropic.Anthropic] = {}
 
 
-def client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        if not ANTHROPIC_API_KEY:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY is not set - copy .env.example to .env and add a key."
-            )
-        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, max_retries=3)
-    return _client
+def client(api_key: str = "") -> anthropic.Anthropic:
+    """An SDK client per credential, so a fallback key gets its own client."""
+    api_key = api_key or ANTHROPIC_API_KEY
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not set - copy .env.example to .env and add a key."
+        )
+    if api_key not in _clients:
+        _clients[api_key] = anthropic.Anthropic(api_key=api_key, max_retries=3)
+    return _clients[api_key]
 
 
 PROVENANCE_FIELDS = [
@@ -261,10 +264,10 @@ RETRYABLE = (
     retry=retry_if_exception_type(RETRYABLE),
     reraise=True,
 )
-def _call_anthropic(pdf_b64: str, model: str) -> tuple[dict, int, int, int]:
+def _call_anthropic(pdf_b64: str, model: str, api_key: str = "") -> tuple[dict, int, int, int]:
     """One request. Returns (parsed json, latency_ms, input_tokens, output_tokens)."""
     t0 = time.perf_counter()
-    response = client().messages.create(
+    response = client(api_key).messages.create(
         model=model,
         max_tokens=16000,
         system=SYSTEM_PROMPT,
@@ -322,8 +325,9 @@ def _call_anthropic(pdf_b64: str, model: str) -> tuple[dict, int, int, int]:
 
 def _call_model(
     pdf_b64: str, model: str, provider: str, pdf_bytes: bytes | None = None,
+    api_key: str = "",
 ) -> tuple[dict, int, int, int]:
-    """Dispatch one extraction to the configured provider.
+    """Dispatch one extraction to one provider with one credential.
 
     Both providers are handed the same schema and the same two prompts, and both
     return the same four-tuple. That is the whole provider seam - nothing below
@@ -331,7 +335,7 @@ def _call_model(
     rule engine's determinism claim independent of the extraction vendor.
     """
     if provider == "anthropic":
-        return _call_anthropic(pdf_b64, model)
+        return _call_anthropic(pdf_b64, model, api_key=api_key)
     if provider == "gemini":
         return gemini.call(
             pdf_b64,
@@ -339,6 +343,7 @@ def _call_model(
             schema=INVOICE_SCHEMA,
             system_prompt=SYSTEM_PROMPT,
             user_prompt=USER_PROMPT,
+            api_key=api_key,
         )
     if provider == "groq":
         # Groq serves text-only models, so this one reads the PDF's text layer
@@ -351,11 +356,72 @@ def _call_model(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=USER_PROMPT,
             pdf_bytes=pdf_bytes,
+            api_key=api_key,
         )
     raise ExtractionError(
         f"Unknown extraction provider {provider!r} - expected one of "
         f"gemini, groq, anthropic."
     )
+
+
+class AllProvidersExhausted(ExtractionError):
+    """Every configured credential on every provider in the chain failed.
+
+    Carries the per-attempt reasons so the run view can say *which* provider
+    gave out and why, rather than just reporting that extraction failed.
+    """
+
+    def __init__(self, attempts: list[dict]):
+        self.attempts = attempts
+        quota = [a for a in attempts if a.get("quota")]
+        if quota and len(quota) == len(attempts):
+            headline = (
+                "Extraction limit reached - every configured API key is out of quota."
+            )
+        else:
+            headline = "Extraction failed on every configured provider."
+        parts = []
+        for a in attempts:
+            label = a["provider"]
+            if a["key_count"] > 1:
+                label += " key {}".format(a["key_index"])
+            parts.append("{}: {}".format(label, a["error"]))
+        super().__init__("{} {}".format(headline, "; ".join(parts)))
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    """Whether a failure means "this credential is spent" rather than "broken".
+
+    Worth separating: a 429 or an explicit quota message should move on to the
+    next key quietly, while a 400 usually means the request itself is wrong and
+    the next key will fail identically.
+    """
+    text = str(exc).lower()
+    return (
+        "429" in text
+        or "quota" in text
+        or "rate limit" in text
+        or "rate_limit" in text
+        or "resource_exhausted" in text
+        or "credit balance is too low" in text
+        or "insufficient_quota" in text
+    )
+
+
+def _attempt_plan(first_provider: str) -> list[tuple[str, str, int, int]]:
+    """(provider, key, index, count) for every credential worth trying, in order.
+
+    The provider the caller asked for goes first even if the configured chain
+    lists it later - an explicit choice in the UI should be honoured before the
+    fallback order kicks in.
+    """
+    ordered = [first_provider] + [p for p in EXTRACTION_CHAIN if p != first_provider]
+    plan: list[tuple[str, str, int, int]] = []
+    for provider in ordered:
+        keys = keys_for(provider)
+        for i, key in enumerate(keys, start=1):
+            plan.append((provider, key, i, len(keys)))
+    return plan
 
 
 def _coerce_number(value: Any) -> float | None:
@@ -504,26 +570,65 @@ def extract(
         return _extract_from_fixture(pdf_bytes)
 
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
-    try:
-        data, latency_ms, in_tok, out_tok = _call_model(pdf_b64, model, provider, pdf_bytes)
-    except Exception as exc:
-        if mode == "auto":
-            log.warning("live extraction failed (%s) - falling back to fixture", exc)
-            extraction, telemetry = _extract_from_fixture(pdf_bytes)
-            telemetry["fallback_from_error"] = str(exc)
-            return extraction, telemetry
-        raise
+    plan = _attempt_plan(provider)
+    if not plan:
+        raise ExtractionError(
+            "No API key is configured for any extraction provider. Set "
+            "GEMINI_API_KEY (or GROQ_API_KEY / ANTHROPIC_API_KEY) in the "
+            "environment."
+        )
 
-    extraction = parse_payload(data)
-    # The model's ISO date reading is not part of RawExtraction's public shape,
-    # so hand it to the caller separately for normalisation.
-    return extraction, {
-        "model": model,
-        "provider": provider,
-        "effort": EXTRACTION_EFFORT if provider == "anthropic" else "n/a",
-        "latency_ms": latency_ms,
-        "input_tokens": in_tok,
-        "output_tokens": out_tok,
-        "invoice_date_iso": data.get("invoice_date_iso") or None,
-        "source": "live",
-    }
+    attempts: list[dict] = []
+    for used_provider, api_key, key_index, key_count in plan:
+        # The model is resolved per provider: falling back from Gemini to Groq
+        # must not carry the Gemini model name across.
+        used_model = model if used_provider == provider else model_for(used_provider)
+        try:
+            data, latency_ms, in_tok, out_tok = _call_model(
+                pdf_b64, used_model, used_provider, pdf_bytes, api_key=api_key,
+            )
+        except Exception as exc:
+            quota = _is_quota_error(exc)
+            attempts.append({
+                "provider": used_provider,
+                "model": used_model,
+                "key_index": key_index,
+                "key_count": key_count,
+                "quota": quota,
+                "error": str(exc)[:400],
+            })
+            log.warning(
+                "extraction failed on %s (key %d/%d, %s) - %s",
+                used_provider, key_index, key_count,
+                "quota exhausted" if quota else "error",
+                str(exc)[:200],
+            )
+            continue
+
+        extraction = parse_payload(data)
+        # The model's ISO date reading is not part of RawExtraction's public
+        # shape, so hand it to the caller separately for normalisation.
+        return extraction, {
+            "model": used_model,
+            "provider": used_provider,
+            "effort": EXTRACTION_EFFORT if used_provider == "anthropic" else "n/a",
+            "latency_ms": latency_ms,
+            "input_tokens": in_tok,
+            "output_tokens": out_tok,
+            "invoice_date_iso": data.get("invoice_date_iso") or None,
+            "source": "live",
+            # Present only when the first choice did not answer, so the run view
+            # can say the chain was walked rather than silently showing a
+            # provider the operator did not pick.
+            "failover_from": [a["provider"] for a in attempts] or None,
+            "attempts": attempts or None,
+        }
+
+    exhausted = AllProvidersExhausted(attempts)
+    if mode == "auto":
+        log.warning("%s - falling back to fixture", exhausted)
+        extraction, telemetry = _extract_from_fixture(pdf_bytes)
+        telemetry["fallback_from_error"] = str(exhausted)
+        telemetry["attempts"] = attempts
+        return extraction, telemetry
+    raise exhausted

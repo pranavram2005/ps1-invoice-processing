@@ -320,20 +320,53 @@ class PipelineRun:
                 f"offline fixture ({telemetry.get('fixture_file')})" if source == "fixture"
                 else f"{telemetry['model']} in {telemetry['latency_ms']} ms"
             )
+            # A run that only succeeded on the second provider should say so in
+            # the one line a reviewer reads, not only in the expanded payload.
+            # Distinguish "a spare key on the same provider answered" from "a
+            # different provider answered" - they are different stories, and
+            # saying "fell through to gemini" when gemini is what failed reads
+            # as a bug.
+            failover = telemetry.get("failover_from") or []
+            landed = telemetry.get("provider")
+            same_provider = bool(failover) and all(p == landed for p in failover)
+            if not failover:
+                failover_phrase = ""
+            elif same_provider:
+                failover_phrase = f" (on a backup {landed} key; the first was exhausted)"
+            else:
+                spent = ", ".join(dict.fromkeys(p for p in failover if p != landed))
+                failover_phrase = f" (failed over from {spent})"
             record.summary = (
                 f"{fields_found}/5 key fields, {len(extraction.line_items)} line item(s), "
                 f"model confidence {extraction.model_confidence:.2f} - {provenance}"
+                + failover_phrase
             )
             record.payload = {
                 "cached": False,
                 "source": source,
                 "model": telemetry["model"],
+                "provider": telemetry.get("provider"),
                 "effort": telemetry["effort"],
                 "latency_ms": telemetry["latency_ms"],
                 "input_tokens": telemetry["input_tokens"],
                 "output_tokens": telemetry["output_tokens"],
                 "extraction": extraction.model_dump(),
             }
+            if failover:
+                record.payload["failover_from"] = failover
+                record.payload["attempts"] = telemetry.get("attempts")
+                record.payload["failover_note"] = (
+                    (
+                        f"The first {landed} key could not serve this request, so a backup "
+                        f"key for the same provider did."
+                        if same_provider else
+                        f"The first choice could not serve this request, so extraction fell "
+                        f"through to {landed}."
+                    )
+                    + " Free-tier keys are capped per day; the chain exists so one exhausted "
+                    "key does not take the demo down. Every stage after this one is "
+                    "unaffected - the schema is identical whichever key or provider answered."
+                )
             if source == "fixture":
                 record.payload["note"] = (
                     "EXTRACTION_MODE is not 'live', so this run used the bundled ground-truth "

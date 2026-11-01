@@ -123,7 +123,7 @@ def to_gemini_schema(node: Any) -> Any:
 # The call
 # --------------------------------------------------------------------------- #
 
-def _auth_headers() -> dict[str, str]:
+def _auth_headers(api_key: str = "") -> dict[str, str]:
     """Pick the header that matches the credential we were given.
 
     An API key goes in `x-goog-api-key`; an OAuth access token goes in
@@ -136,27 +136,28 @@ def _auth_headers() -> dict[str, str]:
     the live endpoint - bearer gives 401, `x-goog-api-key` gives 200). So the
     OAuth path is opt-in via `GEMINI_AUTH_MODE=oauth` rather than guessed.
     """
-    if not GEMINI_API_KEY:
+    api_key = api_key or GEMINI_API_KEY
+    if not api_key:
         raise GeminiError(
             "GEMINI_API_KEY is not set - copy .env.example to .env and add a key "
             "(or set EXTRACTION_PROVIDER=anthropic)."
         )
     headers = {"Content-Type": "application/json"}
     if GEMINI_AUTH_MODE == "oauth":
-        headers["Authorization"] = f"Bearer {GEMINI_API_KEY}"
+        headers["Authorization"] = f"Bearer {api_key}"
         if GEMINI_PROJECT:
             headers["x-goog-user-project"] = GEMINI_PROJECT
     else:
-        headers["x-goog-api-key"] = GEMINI_API_KEY
+        headers["x-goog-api-key"] = api_key
     return headers
 
 
-def _post(url: str, body: dict) -> dict:
+def _post(url: str, body: dict, api_key: str = "") -> dict:
     request = urllib.request.Request(
         url,
         method="POST",
         data=json.dumps(body).encode("utf-8"),
-        headers=_auth_headers(),
+        headers=_auth_headers(api_key),
     )
     try:
         with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
@@ -190,6 +191,7 @@ def _post(url: str, body: dict) -> dict:
 )
 def call(
     pdf_b64: str, model: str, *, schema: dict, system_prompt: str, user_prompt: str,
+    api_key: str = '',
 ) -> tuple[dict, int, int, int]:
     """One request. Returns (parsed json, latency_ms, input_tokens, output_tokens)."""
     generation: dict[str, Any] = {
@@ -218,7 +220,7 @@ def call(
 
     url = f"{GEMINI_API_BASE}/models/{model}:generateContent"
     t0 = time.perf_counter()
-    payload = _post(url, body)
+    payload = _post(url, body, api_key)
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     # A safety filter can block the prompt outright, with HTTP 200 and no

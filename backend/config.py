@@ -19,13 +19,39 @@ load_dotenv(ROOT / ".env")
 # both providers fill the same seam and return the same schema.
 EXTRACTION_PROVIDER = os.getenv("EXTRACTION_PROVIDER", "gemini").strip().lower()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+
+def _key_list(prefix: str) -> tuple[str, ...]:
+    """Every credential configured for one provider, in order of preference.
+
+    Free tiers fail by running out rather than by breaking, so a single key is
+    a single point of failure for a hosted demo. Two forms are accepted and
+    combined: a comma-separated primary (`GEMINI_API_KEY=a,b`) and numbered
+    spares (`GEMINI_API_KEY_2`, `_3`, ...). Adding a backup key is therefore an
+    environment change on the host, not a code change.
+    """
+    raw: list[str] = list(os.getenv(f"{prefix}_API_KEY", "").split(","))
+    for i in range(2, 9):
+        raw.append(os.getenv(f"{prefix}_API_KEY_{i}", ""))
+    seen: set[str] = set()
+    out: list[str] = []
+    for key in (candidate.strip() for candidate in raw):
+        if key and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return tuple(out)
+
+
+ANTHROPIC_API_KEYS = _key_list("ANTHROPIC")
+# The first key stays exposed under the old name so nothing that reads a single
+# credential has to care that there may be spares behind it.
+ANTHROPIC_API_KEY = ANTHROPIC_API_KEYS[0] if ANTHROPIC_API_KEYS else ""
 
 # Gemini. The credential is sent as an API key (`x-goog-api-key`) unless
 # GEMINI_AUTH_MODE is "oauth", in which case it is sent as a bearer token.
 # Sniffing the prefix does not work: AI Studio issues keys shaped like
 # `AQ.Ab8...` that look like OAuth tokens but authenticate only as API keys.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_API_KEYS = _key_list("GEMINI")
+GEMINI_API_KEY = GEMINI_API_KEYS[0] if GEMINI_API_KEYS else ""
 GEMINI_AUTH_MODE = os.getenv("GEMINI_AUTH_MODE", "api_key").strip().lower()
 GEMINI_API_BASE = os.getenv(
     "GEMINI_API_BASE", "https://generativelanguage.googleapis.com/v1beta"
@@ -41,7 +67,8 @@ GEMINI_THINKING_BUDGET: int | None = int(_thinking) if _thinking else None
 
 # Groq. OpenAI-compatible endpoint; the models it serves are text-only, so that
 # provider reads the PDF's text layer rather than the file. See `groq.py`.
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_API_KEYS = _key_list("GROQ")
+GROQ_API_KEY = GROQ_API_KEYS[0] if GROQ_API_KEYS else ""
 GROQ_API_BASE = os.getenv(
     "GROQ_API_BASE", "https://api.groq.com/openai/v1"
 ).strip().rstrip("/")
@@ -159,7 +186,32 @@ SAMPLE_INVOICE_DIR.mkdir(parents=True, exist_ok=True)
 
 PROVIDERS = ("gemini", "groq", "anthropic")
 
+# The failover order for stage 2.
+#
+# Free tiers do not degrade, they stop: Gemini's is 20 requests/day and returns
+# a hard 429 once spent. A hosted demo behind one key is therefore a demo that
+# works until it doesn't. So an extraction walks this chain - every key of the
+# first provider, then every key of the next - and only gives up when all of
+# them are exhausted. It then fails loudly rather than quietly serving a
+# fixture, because "the daily limit is spent" is a true and useful thing to see,
+# and a silent fallback would make a dead key look like a working system.
+EXTRACTION_CHAIN = tuple(
+    name for name in (
+        part.strip().lower()
+        for part in os.getenv("EXTRACTION_CHAIN", "gemini,groq,anthropic").split(",")
+    ) if name in PROVIDERS
+) or PROVIDERS
+
 _active_provider = EXTRACTION_PROVIDER if EXTRACTION_PROVIDER in PROVIDERS else "gemini"
+
+
+def keys_for(provider: str) -> tuple[str, ...]:
+    """Every credential configured for a provider, best first."""
+    return {
+        "gemini": GEMINI_API_KEYS,
+        "groq": GROQ_API_KEYS,
+        "anthropic": ANTHROPIC_API_KEYS,
+    }.get(provider, ())
 
 
 def active_provider() -> str:

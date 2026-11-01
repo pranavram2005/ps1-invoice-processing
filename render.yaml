@@ -12,20 +12,38 @@ services:
       # this file so it never lands in the repository.
       - key: GEMINI_API_KEY
         sync: false
-      # Only read when EXTRACTION_PROVIDER=anthropic.
+      # Backup credentials. Stage 2 walks EXTRACTION_CHAIN and, within each
+      # provider, every key configured for it - so an exhausted free-tier key
+      # moves to the next one instead of taking the demo down. Set whichever of
+      # these you have in the Render dashboard; all are optional.
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_API_KEY_2
+        sync: false
+      # Only read when the chain reaches it.
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: EXTRACTION_CHAIN
+        value: gemini,groq,anthropic
       # A flash model, because the Gemini free tier refuses the `*-pro` models
       # outright (429, `limit: 0`). Raise it on a billed key.
       - key: EXTRACTION_MODEL
         value: gemini-3.5-flash
       - key: EXTRACTION_EFFORT
         value: medium
-      # live | offline | auto. `auto` prefers a real API call and falls back to
-      # the bundled fixtures if the call fails, which keeps a live demo alive
-      # through a dead key or a network blip. The UI always shows which path ran.
+      # live | offline | auto.
+      #
+      # `live` on purpose. The failover chain above already covers the realistic
+      # failure - one key running out of daily quota - by moving to the next
+      # credential, so the fixture fallback is no longer load-bearing. With
+      # every key exhausted the honest answer is "extraction limit reached",
+      # not a bundled fixture dressed up as a reading of the document. Set this
+      # to `auto` only if a demo must not fail under any circumstances; the UI
+      # badges a fixture run either way.
       - key: EXTRACTION_MODE
-        value: auto
+        value: live
       # Per-stage pacing so the run view is watchable on video. Set to 0 for
       # true pipeline timings.
       - key: STAGE_DELAY_MS

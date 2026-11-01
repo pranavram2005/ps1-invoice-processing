@@ -20,6 +20,7 @@
   <nav class="nav-links" role="tablist" aria-label="Sections">
     <button class="nav-link is-active" data-tab="run" role="tab">Run</button>
     <button class="nav-link" data-tab="dashboard" role="tab">Dashboard</button>
+    <button class="nav-link" data-tab="pos" role="tab">Purchase orders</button>
     <button class="nav-link" data-tab="layouts" role="tab">Layouts</button>
     <button class="nav-link" data-tab="admin" role="tab">Rules &amp; data</button>
   </nav>
@@ -166,6 +167,58 @@
     </div>
   </section>
 
+  <!-- ================================================ PURCHASE ORDERS ==== -->
+  <section class="panel" id="panel-pos">
+    <div class="sec-head">
+      <h2>Purchase orders</h2>
+      <p class="sec-sub">What was ordered, from whom, for how much &mdash; and how much of each
+         budget has already been billed away. Three of the nine checks are decided entirely
+         on this table: <b>R4</b> whether a PO was matched at all, <b>R5</b> whether the
+         invoice sits inside its tolerance, and <b>R6</b> whether cumulative billing has
+         over-consumed it. Open any row for the individual invoices that spent it.</p>
+    </div>
+
+    <div class="budget" id="pos-budget"></div>
+
+    <div class="po-board" id="po-board"></div>
+
+    <div class="table-head">
+      <h2>The purchase-order master</h2>
+      <div class="po-controls">
+        <input class="po-search" id="po-search" type="search" autocomplete="off"
+               placeholder="Search PO, vendor or description" aria-label="Search purchase orders">
+        <div class="filters" id="po-filters">
+          <button class="chip is-active" data-pofilter="ALL">All</button>
+          <button class="chip" data-pofilter="AVAILABLE">Available</button>
+          <button class="chip" data-pofilter="NEAR">Nearly spent</button>
+          <button class="chip" data-pofilter="FULL">Fully billed</button>
+          <button class="chip" data-pofilter="UNUSED">Untouched</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="grid grid-po" id="pos-table">
+        <thead><tr>
+          <th data-posort="po_number">PO</th>
+          <th data-posort="vendor_name">Vendor &amp; what it covers</th>
+          <th data-posort="po_value" class="num">Ordered</th>
+          <th data-posort="already_billed" class="num">Billed</th>
+          <th data-posort="remaining" class="num">Left</th>
+          <th data-posort="pct">Consumed</th>
+          <th data-posort="issued_date">Issued</th>
+          <th data-posort="expiry_date">Expires</th>
+          <th data-posort="status">Status</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty-note" id="pos-empty" hidden>No purchase orders match this filter.</p>
+    </div>
+    <p class="hint po-foot">Every read goes through <code>backend/db.py</code>, so this table is
+       the seam where a real ERP would be plugged in. Values are the seeded procurement master;
+       the <b>Billed</b> column is a live ledger that each approved invoice writes to.</p>
+  </section>
+
   <!-- ================================================ LAYOUTS ============ -->
   <section class="panel" id="panel-layouts">
     <div class="sec-head">
@@ -244,22 +297,12 @@
     <div class="card">
       <div class="card-head">
         <h2>Purchase orders</h2>
-        <p class="hint">The budget every invoice is checked against. This table is what
-           rules <b>R4</b> (was a PO matched), <b>R5</b> (is the invoice inside its
-           tolerance) and <b>R6</b> (does cumulative billing exceed it) decide on.
-           Sorted by how much of each budget is already spoken for &mdash; click any row
-           for the invoices that consumed it.</p>
+        <p class="hint">The budget every invoice is checked against, and the ledger rules
+           <b>R4</b>, <b>R5</b> and <b>R6</b> are decided on. It is large enough to deserve
+           its own page.</p>
       </div>
-      <div class="pos-summary" id="pos-summary"></div>
-      <div class="table-wrap">
-        <table class="grid grid-po" id="pos-table">
-          <thead><tr>
-            <th>PO</th><th>Vendor &amp; what it covers</th>
-            <th class="num">Value</th><th class="num">Billed</th><th class="num">Left</th>
-            <th>Consumed</th><th>Valid</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="card-actions">
+        <button class="btn btn-ghost" data-goto="pos" type="button">Open the purchase-order master</button>
       </div>
     </div>
 

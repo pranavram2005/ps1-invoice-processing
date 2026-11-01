@@ -89,8 +89,9 @@ def to_strict_schema(node: Any) -> Any:
     return out
 
 
-def _post(url: str, body: dict) -> dict:
-    if not GROQ_API_KEY:
+def _post(url: str, body: dict, api_key: str = '') -> dict:
+    api_key = api_key or GROQ_API_KEY
+    if not api_key:
         raise GroqError(
             "GROQ_API_KEY is not set - add it to .env, or switch provider."
         )
@@ -99,7 +100,7 @@ def _post(url: str, body: dict) -> dict:
         method="POST",
         data=json.dumps(body).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "User-Agent": USER_AGENT,
         },
@@ -154,6 +155,7 @@ def pdf_to_text(pdf_bytes: bytes) -> str:
 def call(
     pdf_b64: str, model: str, *, schema: dict, system_prompt: str, user_prompt: str,
     pdf_bytes: bytes | None = None,
+    api_key: str = '',
 ) -> tuple[dict, int, int, int]:
     """One request. Returns (parsed json, latency_ms, input_tokens, output_tokens).
 
@@ -196,7 +198,7 @@ def call(
     }
 
     t0 = time.perf_counter()
-    payload = _post(f"{GROQ_API_BASE}/chat/completions", body)
+    payload = _post(f"{GROQ_API_BASE}/chat/completions", body, api_key)
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
     choices = payload.get("choices") or []

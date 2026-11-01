@@ -128,6 +128,10 @@
     sort: { key: 'started_at', dir: 'desc' },
     config: null,
     defaults: null,
+    pos: [],
+    posFilter: 'ALL',
+    posQuery: '',
+    posSort: { key: 'pct', dir: 'desc' },
   };
 
   // -------------------------------------------------------------------- tabs
@@ -139,6 +143,7 @@
     // last one happened to be scrolled to.
     window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     if (name === 'dashboard') loadDashboard();
+    if (name === 'pos') loadPos();
     if (name === 'admin') loadAdmin();
     if (name === 'layouts') loadLayouts();
   }
@@ -1437,7 +1442,9 @@
             ${over ? '<b class="po-tag">fully billed</b>' : ''}</span>
         </li>`;
       }).join('')}</ul>
-      <p class="chart-foot">Showing ${rows.length} of ${pos.length}. Open any PO for the invoices that consumed it.</p>`;
+      <p class="chart-foot">Showing ${rows.length} of ${pos.length}. Open any PO for the invoices
+         that consumed it, or see
+         <button class="linkish" data-goto="pos" type="button">the full purchase-order master</button>.</p>`;
       bindTooltips(node);
     } catch (err) {
       node.innerHTML = '<p class="chart-empty">Could not load purchase orders.</p>';
@@ -1580,15 +1587,14 @@
 
   async function loadAdmin() {
     try {
-      const [rules, config, pos, vendors, telemetry] = await Promise.all([
-        api('/api/rules'), api('/api/config'), api('/api/pos'),
+      const [rules, config, vendors, telemetry] = await Promise.all([
+        api('/api/rules'), api('/api/config'),
         api('/api/vendors'), api('/api/admin/telemetry'),
       ]);
       state.config = config.config;
       state.defaults = config.defaults;
       renderRules(rules);
       renderConfigForm(config);
-      renderPos(pos);
       renderVendors(vendors);
       renderTelemetry(telemetry);
     } catch (err) {
@@ -1671,77 +1677,297 @@
     }
   }
 
-  /** The purchase-order master - the data every PO check is decided against.
+  // --------------------------------------------------------- purchase orders
+
+  /** The purchase-order master, as its own page.
    *
    *  This is the source of truth behind rules R4 (was a PO matched), R5 (is the
    *  invoice inside its tolerance) and R6 (does cumulative billing exceed it),
-   *  so it is laid out to be analysed rather than merely displayed: sorted by
-   *  how consumed each PO is, with the headroom stated in money as well as
-   *  percent, and every row expandable to the individual invoices that consumed
-   *  it. A number that decides a payment should be traceable to the invoices
+   *  so it is laid out to be analysed rather than merely displayed: every figure
+   *  that decides a payment is on the row, headroom is stated in money as well
+   *  as percent, and each row expands to the individual invoices that consumed
+   *  it. A number that blocks a payment should be traceable to the invoices
    *  that produced it.
    */
-  function renderPos(pos) {
-    const rows = pos
-      .map((po) => ({ ...po, pct: po.po_value ? (po.already_billed / po.po_value) * 100 : 0 }))
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  /** Decorate a raw PO with everything the page sorts, filters and colours on. */
+  function decoratePo(po) {
+    const value = Number(po.po_value) || 0;
+    const billed = Number(po.already_billed) || 0;
+    const remaining = po.remaining != null ? Number(po.remaining) : value - billed;
+    const pct = value ? (billed / value) * 100 : 0;
+    const expiry = po.expiry_date ? new Date(`${po.expiry_date}T00:00:00`) : null;
+    const daysLeft = expiry && !isNaN(expiry)
+      ? Math.round((expiry - new Date()) / DAY_MS)
+      : null;
+    // "unused" is a distinct state from "ok": it is the case R6 explicitly
+    // stands aside on, so it is worth being able to see and filter.
+    const health = pct >= 100 ? 'over' : pct >= 80 ? 'near' : billed === 0 ? 'unused' : 'ok';
+    return {
+      ...po, value, billed, remaining, pct, daysLeft, health,
+      expired: daysLeft != null && daysLeft < 0,
+    };
+  }
+
+  const PO_HEALTH = {
+    over:   { cls: 'is-over',   tag: 'fully billed'  },
+    near:   { cls: 'is-near',   tag: 'nearly spent'  },
+    unused: { cls: 'is-unused', tag: 'untouched'     },
+    ok:     { cls: 'is-ok',     tag: ''              },
+  };
+
+  const PO_FILTERS = {
+    ALL:       () => true,
+    AVAILABLE: (po) => po.health === 'ok' || po.health === 'unused',
+    NEAR:      (po) => po.health === 'near',
+    FULL:      (po) => po.health === 'over',
+    UNUSED:    (po) => po.health === 'unused',
+  };
+
+  async function loadPos() {
+    const body = $('#pos-table tbody');
+    try {
+      state.pos = (await api('/api/pos')).map(decoratePo);
+    } catch (err) {
+      body.innerHTML = '';
+      $('#pos-tiles').innerHTML = '';
+      $('#po-board').innerHTML = '';
+      const empty = $('#pos-empty');
+      empty.hidden = false;
+      empty.textContent = `Could not load purchase orders: ${err.message}`;
+      return;
+    }
+    renderBudget();
+    renderPoBoard();
+    renderPosTable();
+  }
+
+  /** Indian short-scale money. "INR 43,80,000.00" is unreadable at a glance and
+   *  wraps in any sensible column width; a controller reading this page thinks
+   *  in lakhs and crores. The exact figure stays on the title attribute. */
+  function compactInr(value) {
+    const n = Number(value) || 0;
+    const sign = n < 0 ? '-' : '';
+    const a = Math.abs(n);
+    if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(2)} Cr`;
+    if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(2)} L`;
+    if (a >= 1e3) return `${sign}₹${(a / 1e3).toFixed(1)}K`;
+    return `${sign}₹${a.toFixed(0)}`;
+  }
+
+  /** The commitment position, as one panel rather than six boxes.
+   *
+   *  Six equal tiles gave six numbers equal weight, which is wrong: five of
+   *  them are context for one question - how much of what we committed is
+   *  already spent. So that single ratio is the ring, the money that composes
+   *  it sits beside it on hairline-divided rows, and the per-PO counts are
+   *  pills underneath. Money is shown in lakhs and crores because the full
+   *  figure wrapped and nobody reads "INR 43,80,000.00" at a glance.
+   */
+  function renderBudget() {
+    const pos = state.pos;
+    const t = pos.reduce((acc, po) => ({
+      value: acc.value + po.value,
+      billed: acc.billed + po.billed,
+      over: acc.over + (po.health === 'over' ? 1 : 0),
+      near: acc.near + (po.health === 'near' ? 1 : 0),
+      unused: acc.unused + (po.health === 'unused' ? 1 : 0),
+    }), { value: 0, billed: 0, over: 0, near: 0, unused: 0 });
+    const available = t.value - t.billed;
+    const pct = t.value ? (t.billed / t.value) * 100 : 0;
+    const healthy = pos.length - t.over - t.near;
+
+    // A stroked circle, drawn from the top. r=52 in a 120 box leaves room for
+    // the 13px stroke without clipping.
+    const R = 52;
+    const circ = 2 * Math.PI * R;
+    const dash = (Math.min(pct, 100) / 100) * circ;
+
+    const fig = (label, value, exact, sub) => `
+      <div class="bfig">
+        <div class="bfig-k">${label}</div>
+        <div class="bfig-v" title="${esc(exact)}">${value}</div>
+        <div class="bfig-s">${sub}</div>
+      </div>`;
+
+    $('#pos-budget').innerHTML = `
+      <div class="budget-ring">
+        <svg viewBox="0 0 120 120" role="img"
+             aria-label="${pct.toFixed(1)}% of committed value billed">
+          <circle class="ring-track" cx="60" cy="60" r="${R}"></circle>
+          <circle class="ring-fill" cx="60" cy="60" r="${R}"
+                  stroke-dasharray="${dash.toFixed(2)} ${(circ - dash).toFixed(2)}"
+                  transform="rotate(-90 60 60)"></circle>
+        </svg>
+        <div class="ring-mid">
+          <b>${pct.toFixed(1)}<span>%</span></b>
+          <span class="ring-cap">billed</span>
+        </div>
+      </div>
+
+      <div class="budget-figs">
+        ${fig('Committed', compactInr(t.value), money(t.value, 'INR'),
+              `across ${pos.length} purchase orders`)}
+        ${fig('Billed to date', compactInr(t.billed), money(t.billed, 'INR'),
+              'what the ledger R6 reads already holds')}
+        ${fig('Still available', compactInr(available), money(available, 'INR'),
+              'headroom before R6 starts rejecting')}
+      </div>
+
+      <div class="budget-flags">
+        ${t.over ? `<span class="bflag is-over"><b>${t.over}</b> over-consumed</span>` : ''}
+        ${t.near ? `<span class="bflag is-near"><b>${t.near}</b> nearly spent</span>` : ''}
+        <span class="bflag is-ok"><b>${healthy}</b> with headroom</span>
+        ${t.unused ? `<span class="bflag"><b>${t.unused}</b> untouched</span>` : ''}
+      </div>`;
+  }
+
+  /** The POs a human should look at, pulled out of the table so they are not
+   *  something you have to notice by scanning. */
+  function renderPoBoard() {
+    const risky = state.pos
+      .filter((po) => po.health === 'over' || po.health === 'near' || po.expired)
       .sort((a, b) => b.pct - a.pct);
-
-    const totals = rows.reduce((acc, po) => ({
-      value: acc.value + (po.po_value || 0),
-      billed: acc.billed + (po.already_billed || 0),
-    }), { value: 0, billed: 0 });
-
-    $('#pos-summary').innerHTML = `
-      <span><b>${rows.length}</b> purchase orders</span>
-      <span><b>${money(totals.value, 'INR')}</b> committed</span>
-      <span><b>${money(totals.billed, 'INR')}</b> billed</span>
-      <span><b>${money(totals.value - totals.billed, 'INR')}</b> still available</span>`;
-
-    $('#pos-table tbody').innerHTML = rows.map((po) => {
-      const pct = po.pct;
-      const state = pct >= 100 ? 'is-over' : pct >= 80 ? 'is-near' : 'is-ok';
-      const tag = pct >= 100 ? 'fully billed' : pct >= 80 ? 'nearly spent' : '';
-      return `<tr class="po-main ${state}" data-po="${esc(po.po_number)}" tabindex="0">
-        <td><code class="po-code">${esc(po.po_number)}</code></td>
-        <td>${esc(po.vendor_name || po.vendor_id)}
-            <div class="po-desc">${esc(po.description || '')}</div></td>
-        <td class="num">${money(po.po_value)}</td>
-        <td class="num">${money(po.already_billed)}</td>
-        <td class="num"><b>${money(po.remaining)}</b></td>
-        <td class="po-cell">
-          <div class="po-meter">
-            <span class="po-meter-fill" style="width:${Math.min(pct, 100)}%"></span>
+    const node = $('#po-board');
+    if (!risky.length) {
+      node.innerHTML = `<p class="po-board-none">Every purchase order has headroom and none
+        has expired. Nothing here needs a decision.</p>`;
+      return;
+    }
+    node.innerHTML = `
+      <div class="po-board-head">Needs attention</div>
+      <div class="po-board-grid">${risky.map((po) => `
+        <article class="po-alert ${PO_HEALTH[po.health].cls}" data-pogo="${esc(po.po_number)}"
+                 tabindex="0" role="button">
+          <div class="po-alert-top">
+            <code class="po-code">${esc(po.po_number)}</code>
+            <span class="po-tag">${po.expired ? 'expired' : PO_HEALTH[po.health].tag}</span>
           </div>
-          <span class="po-meter-pct">${pct.toFixed(0)}%</span>
-          ${tag ? `<span class="po-tag">${tag}</span>` : ''}
+          <div class="po-alert-vendor">${esc(po.vendor_name || po.vendor_id)}</div>
+          <div class="po-meter">
+            <span class="po-meter-fill" style="width:${Math.min(po.pct, 100)}%"></span>
+          </div>
+          <div class="po-alert-foot">
+            <span><b>${po.pct.toFixed(1)}%</b> consumed</span>
+            <span>${po.remaining < 0
+              ? `${money(Math.abs(po.remaining), 'INR')} over`
+              : `${money(po.remaining, 'INR')} left`}</span>
+          </div>
+        </article>`).join('')}</div>`;
+
+    $$('#po-board [data-pogo]').forEach((card) => {
+      const go = () => {
+        state.posFilter = 'ALL';
+        state.posQuery = card.dataset.pogo;
+        $('#po-search').value = card.dataset.pogo;
+        $$('#po-filters .chip').forEach((c) =>
+          c.classList.toggle('is-active', c.dataset.pofilter === 'ALL'));
+        renderPosTable();
+        const row = $(`#pos-table [data-po="${CSS.escape(card.dataset.pogo)}"]`);
+        if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      };
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
+  }
+
+  function renderPosTable() {
+    const q = state.posQuery.trim().toLowerCase();
+    const rows = state.pos
+      .filter(PO_FILTERS[state.posFilter] || PO_FILTERS.ALL)
+      .filter((po) => !q || [po.po_number, po.vendor_name, po.vendor_id, po.description]
+        .some((f) => String(f || '').toLowerCase().includes(q)));
+
+    const { key, dir } = state.posSort;
+    const sign = dir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      const x = a[key]; const y = b[key];
+      if (x == null) return 1;
+      if (y == null) return -1;
+      if (typeof x === 'number' && typeof y === 'number') return (x - y) * sign;
+      return String(x).localeCompare(String(y)) * sign;
+    });
+
+    $$('#pos-table th[data-posort]').forEach((th) => {
+      th.classList.toggle('is-sorted', th.dataset.posort === key);
+      th.dataset.dir = th.dataset.posort === key ? dir : '';
+    });
+
+    $('#pos-empty').hidden = rows.length > 0;
+    $('#pos-table tbody').innerHTML = rows.map((po) => {
+      const h = PO_HEALTH[po.health];
+      const expiryNote = po.daysLeft == null ? ''
+        : po.daysLeft < 0 ? `<span class="po-exp is-bad">${Math.abs(po.daysLeft)}d ago</span>`
+        : po.daysLeft <= 30 ? `<span class="po-exp is-soon">in ${po.daysLeft}d</span>`
+        : `<span class="po-exp">in ${po.daysLeft}d</span>`;
+      return `<tr class="po-main ${h.cls}" data-po="${esc(po.po_number)}" tabindex="0"
+                  role="button" aria-expanded="false">
+        <td><code class="po-code">${esc(po.po_number)}</code></td>
+        <td class="po-vendor-cell">${esc(po.vendor_name || po.vendor_id)}
+            <div class="po-desc">${esc(po.description || '')}</div>
+            <div class="po-vid"><code>${esc(po.vendor_id)}</code></div></td>
+        <td class="num">${money(po.value)}</td>
+        <td class="num">${money(po.billed)}</td>
+        <td class="num"><b class="${po.remaining < 0 ? 'po-neg' : ''}">${money(po.remaining)}</b></td>
+        <td class="po-consumed">
+          <div class="po-cell">
+            <div class="po-meter">
+              <span class="po-meter-fill" style="width:${Math.min(po.pct, 100)}%"></span>
+            </div>
+            <span class="po-meter-pct">${po.pct.toFixed(1)}%</span>
+            ${h.tag ? `<span class="po-tag">${h.tag}</span>` : ''}
+          </div>
         </td>
-        <td class="po-when">${esc(po.issued_date)}<br><span>to ${esc(po.expiry_date || '—')}</span></td>
+        <td class="po-when">${esc(po.issued_date || '—')}</td>
+        <td class="po-when">${esc(po.expiry_date || '—')}${expiryNote ? `<br>${expiryNote}` : ''}</td>
+        <td><span class="po-status">${esc(po.status || '—')}</span>
+            <span class="po-ccy">${esc(po.currency || '')}</span></td>
       </tr>
       <tr class="po-detail" data-detail="${esc(po.po_number)}" hidden>
-        <td colspan="7"><div class="po-detail-body">Loading…</div></td>
+        <td colspan="9"><div class="po-detail-body">Loading…</div></td>
       </tr>`;
     }).join('');
 
-    // Expand a row to the invoices that actually consumed it.
+    wirePoRows();
+  }
+
+  /** Expand a row to the invoices that actually consumed it. */
+  function wirePoRows() {
     $$('#pos-table .po-main').forEach((tr) => {
       const open = async () => {
         const detail = $(`#pos-table [data-detail="${CSS.escape(tr.dataset.po)}"]`);
         if (!detail) return;
         detail.hidden = !detail.hidden;
         tr.classList.toggle('is-open', !detail.hidden);
+        tr.setAttribute('aria-expanded', String(!detail.hidden));
         if (detail.hidden || detail.dataset.loaded) return;
         try {
           const po = await api(`/api/pos/${encodeURIComponent(tr.dataset.po)}`);
           const used = po.consumption || [];
+          const total = used.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
           $('.po-detail-body', detail).innerHTML = used.length
             ? `<table class="po-sub"><thead><tr>
-                 <th>Invoice</th><th class="num">Amount</th><th>Booked</th><th>Run</th>
+                 <th>Invoice</th><th class="num">Amount</th><th>Source</th>
+                 <th>Booked</th><th>Run</th>
                </tr></thead><tbody>${used.map((c) => `<tr>
                  <td>${esc(c.invoice_number || '—')}</td>
                  <td class="num">${money(c.amount, 'INR')}</td>
-                 <td>${when(c.booked_at)}</td>
-                 <td><a class="reclink" href="#" data-run="${esc(c.run_id)}">${esc(c.run_id)}</a></td>
-               </tr>`).join('')}</tbody></table>`
+                 <td>${c.source === 'history'
+                   ? '<span class="po-src">billed before this system</span>'
+                   : '<span class="po-src is-live">booked by a run</span>'}</td>
+                 <td>${c.booked_at ? when(c.booked_at) : '—'}</td>
+                 <td>${c.run_id
+                   ? `<a class="reclink" href="#" data-run="${esc(c.run_id)}">${esc(c.run_id)}</a>`
+                   : '—'}</td>
+               </tr>`).join('')}</tbody>
+               <tfoot><tr><td>${used.length} invoice${used.length === 1 ? '' : 's'}</td>
+                 <td class="num"><b>${money(total, 'INR')}</b></td>
+                 <td colspan="3">is what R6 compares the next invoice against</td></tr></tfoot>
+               </table>`
             : '<p class="hint">Nothing has been billed against this PO yet, so rule R6 has no ledger to check and stands aside.</p>';
           detail.dataset.loaded = '1';
         } catch (err) {
@@ -1888,6 +2114,30 @@
         $$('#decision-filters .chip').forEach((other) =>
           other.classList.toggle('is-active', other === chip));
         renderRunsTable();
+      });
+    });
+
+    $$('#po-filters .chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        state.posFilter = chip.dataset.pofilter;
+        $$('#po-filters .chip').forEach((other) =>
+          other.classList.toggle('is-active', other === chip));
+        renderPosTable();
+      });
+    });
+
+    $('#po-search').addEventListener('input', (e) => {
+      state.posQuery = e.target.value;
+      renderPosTable();
+    });
+
+    $$('#pos-table th[data-posort]').forEach((th) => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.posort;
+        state.posSort = state.posSort.key === key
+          ? { key, dir: state.posSort.dir === 'asc' ? 'desc' : 'asc' }
+          : { key, dir: 'desc' };
+        renderPosTable();
       });
     });
 
