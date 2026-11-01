@@ -911,7 +911,7 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-top: 0;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--radius) var(--radius);
   padding: 17px 19px;
 }
 
@@ -1924,6 +1924,93 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   font-weight: 500;
   color: var(--accent-ink);
 }
+
+
+
+/* ----- what this invoice was measured against ------------------------------
+   The document tells you what is claimed; this tells you what it was compared
+   to. Both halves have to be on screen for "exceeds the PO" to be checkable
+   rather than merely asserted. */
+
+.checked {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 0;
+}
+
+.checked .pane-head { border-radius: 0; }
+
+.ca-body { padding: 4px 19px 16px; }
+
+.ca-item { padding: 14px 0; border-top: 1px solid var(--border); }
+.ca-item:first-child { border-top: 0; }
+
+.ca-k {
+  font-size: 10.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 6px;
+}
+
+.ca-v { font-size: 14px; font-weight: 550; line-height: 1.4; }
+.ca-v.ca-none { font-weight: 400; color: var(--ink-3); }
+
+.ca-sub {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-4);
+  margin-top: 2px;
+}
+
+.ca-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
+
+.ca-dl { margin: 11px 0 0; display: grid; gap: 6px; }
+
+.ca-dl > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.ca-dl dt { font-size: 12px; color: var(--ink-4); }
+.ca-dl dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.ca-dl dd b { color: var(--ink); font-weight: 600; }
+
+.ca-ok  { color: #1f6b4f; }
+.ca-bad { color: var(--reject); font-weight: 550; }
+
+.ca-also { margin-top: 12px; }
+
+.ca-also > summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--accent-ink);
+  list-style: none;
+}
+.ca-also > summary::-webkit-details-marker { display: none; }
+.ca-also > summary::before { content: '+ '; }
+.ca-also[open] > summary::before { content: '- '; }
+
+.ca-cands { list-style: none; margin: 9px 0 0; padding: 0; display: grid; gap: 6px; }
+
+.ca-cands li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.ca-cands span { color: var(--ink-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ca-cands b { text-align: right; font-variant-numeric: tabular-nums; }
 
 
 /* The `hidden` attribute sets display:none at the lowest precedence, so any

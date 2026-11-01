@@ -1078,11 +1078,81 @@
       ${decision.requires_human ? '<div class="v-tag">needs a human</div>' : ''}`;
 
     renderFacts(run);
+    renderCheckedAgainst(run);
     renderChecks(run);
     renderDocView(run);
     $('#run-panes').hidden = false;
     $('#run-detail').hidden = false;
     loadSummary(run);
+  }
+
+  /** The reference records this invoice was actually measured against.
+   *
+   *  The facts panel says the invoice names PO-4471; this says what PO-4471
+   *  *is* - its value, what was already billed against it, what that leaves -
+   *  which is the half of the comparison the document cannot tell you. Without
+   *  it "exceeds the PO" is a claim; with it, it is arithmetic you can check.
+   *
+   *  Everything here comes from the run's own stored record, so it is what the
+   *  rules actually read at the time, not a fresh lookup that may since have
+   *  moved.
+   */
+  function renderCheckedAgainst(run) {
+    const node = $('#checked-against');
+    if (!node) return;
+    const vendor = run.vendor || {};
+    const po = run.po || {};
+    const winner = (po.candidates || []).find((c) => c.po_number === po.po_number);
+
+    const vendorBlock = `
+      <div class="ca-item">
+        <div class="ca-k">Vendor master</div>
+        ${vendor.vendor_id ? `
+          <div class="ca-v">${esc(vendor.vendor_name)}</div>
+          <dl class="ca-dl">
+            <div><dt>Record</dt><dd><code>${esc(vendor.vendor_id)}</code></dd></div>
+            <div><dt>Status</dt><dd>${vendor.status === 'matched'
+              ? '<span class="ca-ok">on the approved list</span>'
+              : `<span class="ca-bad">${esc(vendor.status)}</span>`}</dd></div>
+            <div><dt>Matched</dt><dd>${esc((vendor.considered || [])[0]?.via || '')} ·
+                 score ${num(vendor.score, 2)}</dd></div>
+          </dl>`
+          : `<div class="ca-v ca-none">No vendor on the master matched</div>
+             <p class="ca-note">Best score ${num(vendor.score, 2)}, below the floor. This is
+                what rule R3 rejected on.</p>`}
+      </div>`;
+
+    const poBlock = `
+      <div class="ca-item">
+        <div class="ca-k">Purchase order</div>
+        ${winner ? `
+          <div class="ca-v"><a class="reclink" href="#" data-po="${esc(winner.po_number)}">${esc(winner.po_number)}</a>
+            <span class="ca-sub">${esc(winner.description || '')}</span></div>
+          <dl class="ca-dl">
+            <div><dt>PO value</dt><dd>${money(winner.po_value, 'INR')}</dd></div>
+            <div><dt>Already billed</dt><dd>${money(winner.already_billed, 'INR')}</dd></div>
+            <div><dt>Left before this</dt><dd><b>${money(winner.remaining, 'INR')}</b></dd></div>
+            <div><dt>This invoice</dt><dd>${money((run.normalized || {}).total_amount, 'INR')}</dd></div>
+            <div><dt>Matched by</dt><dd>${esc((winner.reason || '').split(';')[0])}</dd></div>
+          </dl>`
+          : `<div class="ca-v ca-none">No purchase order matched</div>
+             <p class="ca-note">${esc(po.note || 'Nothing scored above the match floor.')}</p>`}
+      </div>`;
+
+    const otherCands = (po.candidates || []).filter((c) => c.po_number !== po.po_number).slice(0, 3);
+    const alsoBlock = otherCands.length ? `
+      <details class="ca-also">
+        <summary>${otherCands.length} other purchase order${otherCands.length === 1 ? '' : 's'} were scored</summary>
+        <ul class="ca-cands">${otherCands.map((c) => `
+          <li><a class="reclink" href="#" data-po="${esc(c.po_number)}">${esc(c.po_number)}</a>
+              <span>${esc(c.description || '')}</span>
+              <b>${num(c.score, 2)}</b></li>`).join('')}</ul>
+      </details>` : '';
+
+    node.hidden = false;
+    node.innerHTML = `
+      <div class="pane-head">What it was checked against</div>
+      <div class="ca-body">${vendorBlock}${poBlock}${alsoBlock}</div>`;
   }
 
   /** The four things a person actually wants off an invoice. */
@@ -1097,12 +1167,16 @@
       ['Vendor', inv.vendor_name_raw || inv.vendor_name_canonical || '—'],
       ['Invoice no.', inv.invoice_number || 'not printed'],
       ['Amount', money],
-      ['Purchase order', po.matched ? po.po_number : 'none matched'],
+      ['Purchase order', po.matched
+        ? `<a class="reclink" href="#" data-po="${esc(po.po_number)}">${esc(po.po_number)}</a>`
+        : 'none matched'],
     ];
-    node.innerHTML = cells.map(([k, v]) => `
+    // Every cell but the PO is plain text and is escaped; the PO cell is built
+    // as markup above so it can link to the record it was checked against.
+    node.innerHTML = cells.map(([k, v], i) => `
       <div class="fact">
         <div class="fact-k">${esc(k)}</div>
-        <div class="fact-v">${esc(String(v))}</div>
+        <div class="fact-v">${i === 3 ? v : esc(String(v))}</div>
       </div>`).join('');
   }
 
