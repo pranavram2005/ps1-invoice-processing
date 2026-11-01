@@ -1,0 +1,49 @@
+# Build context exclusions.
+#
+# Render builds from a git clone, so these are already absent there. A local
+# `docker compose up --build` is not so lucky: it copies the working directory
+# as it stands, which includes a live .env and any virtualenv sitting in the
+# tree. Baking a credential into an image layer is the kind of mistake that is
+# invisible until the image is shared, so exclude them explicitly rather than
+# relying on .gitignore, which Docker does not read.
+
+# Secrets - never in an image layer
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Claude Code local worktrees: these carry their own .env and .venv
+.claude/
+
+# Virtualenvs and caches - the image installs its own from requirements.txt
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Version control and CI
+.git/
+.gitignore
+
+# Node: the invoice generator is a dev tool, not part of the running app
+node_modules/
+tools/invoice_gen/node_modules/
+
+# Local run artefacts. The seeded data/invoices.db IS wanted, so it is not
+# listed here; uploads and screenshots are regenerated and are not.
+data/uploads/
+data/ui-check/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.log
