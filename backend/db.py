@@ -448,6 +448,35 @@ def delete_run(run_id: str) -> bool:
 # Duplicate detection (R7)
 # --------------------------------------------------------------------------- #
 
+def delete_runs_by_hash(file_sha256: str) -> int:
+    """Forget every completed run of one exact file, and un-book what it spent.
+
+    The prepared scenarios each advertise an expected verdict, and that verdict
+    is the one the invoice earns on its own merits. Once a file is in history
+    it can no longer earn it: R7 sees the earlier submission and R6 sees the PO
+    budget that submission consumed, so a scenario labelled APPROVE returns
+    REJECT - correct behaviour reported against a promise the UI had already
+    broken.
+
+    Re-running a prepared scenario therefore clears that scenario's own prior
+    runs first. Only the identical file is touched, so the cases that depend on
+    *another* file being in history still work: the near-duplicate still finds
+    the Nalanda original, and the split-PO case still reads the seeded prior
+    billing. An arbitrary upload is never cleared - a real duplicate must still
+    be caught.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT run_id FROM runs WHERE file_sha256 = ?", (file_sha256,)
+        ).fetchall()
+        ids = [r[0] for r in rows]
+        for run_id in ids:
+            conn.execute("DELETE FROM po_consumption WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM run_stages WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+        return len(ids)
+
+
 def find_run_by_hash(file_sha256: str, exclude_run_id: str | None = None) -> dict | None:
     """Exact duplicate: the same bytes were submitted before."""
     sql = (
