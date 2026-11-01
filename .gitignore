@@ -42,3 +42,6 @@ desktop.ini
 
 # Logs
 *.log
+
+# Claude Code local worktrees - these hold a live .env and must never be pushed
+.claude/
