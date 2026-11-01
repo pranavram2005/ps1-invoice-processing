@@ -1781,6 +1781,151 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   .lay-doc { height: 260px; }
 }
 
+
+/* ----- the purchase-order master ------------------------------------------
+   The data every PO rule decides on, so it is laid out to be analysed: the
+   totals first, rows ordered by how spent each budget is, and each row opening
+   onto the invoices that consumed it. */
+
+.pos-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  padding: 14px 2px 18px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.pos-summary b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-po tbody tr.po-main { cursor: pointer; }
+.grid-po tbody tr.po-main:hover { background: var(--surface-2); }
+.grid-po tbody tr.po-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.po-code { font-size: 12px; }
+
+.po-desc {
+  font-size: 11.5px;
+  color: var(--ink-4);
+  margin-top: 3px;
+  max-width: 34ch;
+}
+
+.po-cell { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+
+.po-meter {
+  width: 84px;
+  height: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  flex: none;
+}
+
+.po-meter-fill { display: block; height: 100%; background: var(--ink); }
+
+.po-main.is-near .po-meter-fill { background: #d8a008; }
+.po-main.is-over .po-meter-fill { background: var(--reject); }
+
+.po-meter-pct {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+}
+
+.po-main.is-over .po-meter-pct { color: var(--reject); }
+
+.po-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-radius: var(--pill);
+  padding: 2px 8px;
+  background: var(--flag-bg);
+  color: var(--flag);
+}
+
+.po-main.is-over .po-tag { background: var(--reject-bg); color: var(--reject); }
+
+.po-when { font-size: 12px; white-space: nowrap; }
+.po-when span { color: var(--ink-4); }
+
+.po-detail > td { background: var(--surface-2); padding: 0; }
+.po-detail-body { padding: 14px 16px 16px; }
+
+.po-sub { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.po-sub th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  padding: 0 10px 7px 0;
+  font-weight: 600;
+}
+.po-sub td { padding: 6px 10px 6px 0; border-top: 1px solid var(--border); }
+.po-sub .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+
+
+/* ----- what each rule checks against ---------------------------------------
+   A reviewer's first question about a rule engine is "compared to what?".
+   These four cards answer it before the tables below, and name the rules each
+   source feeds so the connection is explicit rather than inferred. */
+
+.srcmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.src {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 17px 18px 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.src-k {
+  font-size: 14.5px;
+  font-weight: 550;
+  letter-spacing: -.02em;
+  margin-bottom: 7px;
+}
+
+.src-d {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  flex: 1;
+}
+
+.src-r {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-4);
+  padding-top: 11px;
+  border-top: 1px solid var(--border);
+}
+
+.src-r b {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--accent-ink);
+}
+
+
 /* The `hidden` attribute sets display:none at the lowest precedence, so any
    component with its own display rule (.panes is grid, .verdict is flex)
    silently ignores it. */

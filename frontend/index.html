@@ -179,6 +179,44 @@
   <!-- ================================================== ADMIN ============ -->
   <section class="panel" id="panel-admin">
 
+    <div class="sec-head">
+      <h2>What every invoice is checked against</h2>
+      <p class="sec-sub">An invoice on its own proves nothing. Each of the nine checks
+         compares it against a specific piece of reference data, and all of it is here:
+         who we are allowed to pay, what was ordered, what has already been billed, and
+         the thresholds that decide how much variance is acceptable.</p>
+    </div>
+
+    <div class="srcmap">
+      <article class="src">
+        <div class="src-k">Approved vendors</div>
+        <p class="src-d">The list of suppliers we are allowed to pay at all. An invoice from
+           anyone else, or from a blocked vendor, cannot be paid.</p>
+        <div class="src-r"><b>R3</b> vendor is approved</div>
+      </article>
+      <article class="src">
+        <div class="src-k">Purchase orders</div>
+        <p class="src-d">What was actually ordered and for how much, plus the running total
+           of everything billed against each one.</p>
+        <div class="src-r"><b>R4</b> a PO was matched &middot; <b>R5</b> within tolerance
+           &middot; <b>R6</b> not over-consumed</div>
+      </article>
+      <article class="src">
+        <div class="src-k">Processed history</div>
+        <p class="src-d">Every invoice seen before, by file hash and by vendor/amount/date,
+           so the same bill cannot be paid twice.</p>
+        <div class="src-r"><b>R7</b> not a duplicate &mdash;
+           <button class="linkish" data-goto="dashboard" type="button">see the history</button></div>
+      </article>
+      <article class="src">
+        <div class="src-k">The document itself</div>
+        <p class="src-d">Its own text layer, used to verify every figure the model reported
+           and to judge how much to trust the reading.</p>
+        <div class="src-r"><b>R1</b> fields present &middot; <b>R2</b> arithmetic
+           &middot; <b>R8</b> date &middot; <b>R9</b> confidence</div>
+      </article>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>Rule set</h2>
@@ -205,14 +243,18 @@
     <div class="card">
       <div class="card-head">
         <h2>Purchase orders</h2>
-        <p class="hint">Stands in for a procurement system. Every read goes through one
-           repository module, so swapping in a real ERP API touches one file.</p>
+        <p class="hint">The budget every invoice is checked against. This table is what
+           rules <b>R4</b> (was a PO matched), <b>R5</b> (is the invoice inside its
+           tolerance) and <b>R6</b> (does cumulative billing exceed it) decide on.
+           Sorted by how much of each budget is already spoken for &mdash; click any row
+           for the invoices that consumed it.</p>
       </div>
+      <div class="pos-summary" id="pos-summary"></div>
       <div class="table-wrap">
-        <table class="grid" id="pos-table">
+        <table class="grid grid-po" id="pos-table">
           <thead><tr>
-            <th>PO</th><th>Vendor</th><th>Description</th>
-            <th class="num">Value</th><th class="num">Billed</th><th class="num">Remaining</th>
+            <th>PO</th><th>Vendor &amp; what it covers</th>
+            <th class="num">Value</th><th class="num">Billed</th><th class="num">Left</th>
             <th>Consumed</th><th>Valid</th>
           </tr></thead>
           <tbody></tbody>
@@ -221,7 +263,13 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Approved vendors</h2></div>
+      <div class="card-head">
+        <h2>Approved vendors</h2>
+        <p class="hint">Rule <b>R3</b> resolves the name printed on the invoice against this
+           list &mdash; by GSTIN first, then by fuzzy name match above the score floor. A
+           vendor who is blocked matches confidently and is still rejected, which is a
+           different outcome from one nobody can identify.</p>
+      </div>
       <div class="table-wrap">
         <table class="grid" id="vendors-table">
           <thead><tr>

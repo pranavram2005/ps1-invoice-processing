@@ -135,6 +135,9 @@
   function showTab(name) {
     $$('.nav-link').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.tab === name));
     $$('.panel').forEach((panel) => panel.classList.toggle('is-active', panel.id === `panel-${name}`));
+    // A tab is a different page; land at the top of it rather than wherever the
+    // last one happened to be scrolled to.
+    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     if (name === 'dashboard') loadDashboard();
     if (name === 'admin') loadAdmin();
     if (name === 'layouts') loadLayouts();
@@ -918,6 +921,8 @@
   /** Record links are rendered into innerHTML all over the result view, so bind
    *  them once at the document level rather than after every render. */
   document.addEventListener('click', (event) => {
+    const goto = event.target.closest('[data-goto]');
+    if (goto) { event.preventDefault(); showTab(goto.dataset.goto); return; }
     const link = event.target.closest('.reclink');
     if (!link) return;
     event.preventDefault();
@@ -1586,21 +1591,88 @@
     }
   }
 
+  /** The purchase-order master - the data every PO check is decided against.
+   *
+   *  This is the source of truth behind rules R4 (was a PO matched), R5 (is the
+   *  invoice inside its tolerance) and R6 (does cumulative billing exceed it),
+   *  so it is laid out to be analysed rather than merely displayed: sorted by
+   *  how consumed each PO is, with the headroom stated in money as well as
+   *  percent, and every row expandable to the individual invoices that consumed
+   *  it. A number that decides a payment should be traceable to the invoices
+   *  that produced it.
+   */
   function renderPos(pos) {
-    $('#pos-table tbody').innerHTML = pos.map((po) => {
-      const pct = po.po_value ? Math.min(100, (po.already_billed / po.po_value) * 100) : 0;
-      return `<tr>
-        <td><code>${esc(po.po_number)}</code></td>
-        <td>${esc(po.vendor_name || po.vendor_id)}</td>
-        <td class="wrap">${esc(po.description || '')}</td>
+    const rows = pos
+      .map((po) => ({ ...po, pct: po.po_value ? (po.already_billed / po.po_value) * 100 : 0 }))
+      .sort((a, b) => b.pct - a.pct);
+
+    const totals = rows.reduce((acc, po) => ({
+      value: acc.value + (po.po_value || 0),
+      billed: acc.billed + (po.already_billed || 0),
+    }), { value: 0, billed: 0 });
+
+    $('#pos-summary').innerHTML = `
+      <span><b>${rows.length}</b> purchase orders</span>
+      <span><b>${money(totals.value, 'INR')}</b> committed</span>
+      <span><b>${money(totals.billed, 'INR')}</b> billed</span>
+      <span><b>${money(totals.value - totals.billed, 'INR')}</b> still available</span>`;
+
+    $('#pos-table tbody').innerHTML = rows.map((po) => {
+      const pct = po.pct;
+      const state = pct >= 100 ? 'is-over' : pct >= 80 ? 'is-near' : 'is-ok';
+      const tag = pct >= 100 ? 'fully billed' : pct >= 80 ? 'nearly spent' : '';
+      return `<tr class="po-main ${state}" data-po="${esc(po.po_number)}" tabindex="0">
+        <td><code class="po-code">${esc(po.po_number)}</code></td>
+        <td>${esc(po.vendor_name || po.vendor_id)}
+            <div class="po-desc">${esc(po.description || '')}</div></td>
         <td class="num">${money(po.po_value)}</td>
         <td class="num">${money(po.already_billed)}</td>
-        <td class="num">${money(po.remaining)}</td>
-        <td><div class="consumed">
-          <div class="bar ${pct > 95 ? 'is-warn' : 'is-ok'}"><span style="width:${pct}%"></span></div>
-          <span class="pct">${pct.toFixed(0)}%</span></div></td>
-        <td>${esc(po.issued_date)} → ${esc(po.expiry_date || '—')}</td></tr>`;
+        <td class="num"><b>${money(po.remaining)}</b></td>
+        <td class="po-cell">
+          <div class="po-meter">
+            <span class="po-meter-fill" style="width:${Math.min(pct, 100)}%"></span>
+          </div>
+          <span class="po-meter-pct">${pct.toFixed(0)}%</span>
+          ${tag ? `<span class="po-tag">${tag}</span>` : ''}
+        </td>
+        <td class="po-when">${esc(po.issued_date)}<br><span>to ${esc(po.expiry_date || '—')}</span></td>
+      </tr>
+      <tr class="po-detail" data-detail="${esc(po.po_number)}" hidden>
+        <td colspan="7"><div class="po-detail-body">Loading…</div></td>
+      </tr>`;
     }).join('');
+
+    // Expand a row to the invoices that actually consumed it.
+    $$('#pos-table .po-main').forEach((tr) => {
+      const open = async () => {
+        const detail = $(`#pos-table [data-detail="${CSS.escape(tr.dataset.po)}"]`);
+        if (!detail) return;
+        detail.hidden = !detail.hidden;
+        tr.classList.toggle('is-open', !detail.hidden);
+        if (detail.hidden || detail.dataset.loaded) return;
+        try {
+          const po = await api(`/api/pos/${encodeURIComponent(tr.dataset.po)}`);
+          const used = po.consumption || [];
+          $('.po-detail-body', detail).innerHTML = used.length
+            ? `<table class="po-sub"><thead><tr>
+                 <th>Invoice</th><th class="num">Amount</th><th>Booked</th><th>Run</th>
+               </tr></thead><tbody>${used.map((c) => `<tr>
+                 <td>${esc(c.invoice_number || '—')}</td>
+                 <td class="num">${money(c.amount, 'INR')}</td>
+                 <td>${when(c.booked_at)}</td>
+                 <td><a class="reclink" href="#" data-run="${esc(c.run_id)}">${esc(c.run_id)}</a></td>
+               </tr>`).join('')}</tbody></table>`
+            : '<p class="hint">Nothing has been billed against this PO yet, so rule R6 has no ledger to check and stands aside.</p>';
+          detail.dataset.loaded = '1';
+        } catch (err) {
+          $('.po-detail-body', detail).textContent = `Could not load: ${err.message}`;
+        }
+      };
+      tr.addEventListener('click', open);
+      tr.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+      });
+    });
   }
 
   function renderVendors(vendors) {
