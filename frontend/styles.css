@@ -1552,70 +1552,222 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   margin-top: -3px;
 }
 
-/* ----- layouts gallery ----------------------------------------------------- */
+/* ----- layouts gallery -----------------------------------------------------
+   Three to a row on a wide screen rather than five full-width bands. The five
+   documents are meant to be compared, and comparison wants them side by side. */
 
-.layouts { display: grid; gap: 16px; }
+.layouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
 
 .lay {
-  display: grid;
-  grid-template-columns: 236px minmax(0, 1fr);
-  gap: 22px;
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
+  overflow: hidden;
+  transition: border-color .14s, box-shadow .14s;
 }
+
+.lay:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
 
 .lay-doc {
-  /* A4 proportions, so the rendered page fills the frame instead of floating in
-     the PDF viewer's own dark surround - which cannot be styled from here. */
-  aspect-ratio: 1 / 1.414;
-  height: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+  /* A rendered PNG, not an embedded PDF viewer. Cropped to the top of the page,
+     which is the part that tells one vendor's paperwork from another's. */
+  display: block;
+  width: 100%;
+  height: 168px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
   background: var(--surface-2);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
 }
 
-.lay-doc iframe { width: 100%; height: 100%; border: 0; display: block; }
+.lay-doc img {
+  width: 100%;
+  height: auto;
+  display: block;
+  transition: transform .5s cubic-bezier(.2,.6,.2,1);
+}
 
-.lay-vendor { font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+.lay:hover .lay-doc img { transform: translateY(-14px); }
 
-.lay-dl { margin: 14px 0 0; display: grid; gap: 9px; }
+/* A soft fade at the crop line, so the cut reads as deliberate. */
+.lay-doc::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 42px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0), var(--surface));
+}
+
+.lay-body { padding: 16px 17px 17px; display: flex; flex-direction: column; flex: 1; }
+
+.lay-vendor { font-size: 15.5px; font-weight: 500; letter-spacing: -.02em; }
+
+.lay-shape {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-4);
+}
+
+.lay-hard {
+  margin: 12px 0 0;
+  padding-left: 11px;
+  border-left: 2px solid var(--accent);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.lay-dl { margin: 14px 0 0; display: grid; gap: 7px; }
 
 .lay-dl > div {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
   align-items: baseline;
 }
 
 .lay-dl dt {
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--ink-4);
 }
 
-.lay-dl dd { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.lay-dl dd { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
 
-.lay-hard {
-  margin: 15px 0 0;
-  padding-left: 13px;
-  border-left: 2px solid var(--accent);
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--ink);
+.lay-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 15px;
 }
-
-.lay-runs { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
 
 .chip-run {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   cursor: pointer;
+  font-size: 11.5px;
+  padding: 4px 9px;
+}
+
+/* ----- purchase-order ledger ----------------------------------------------- */
+
+.chart-col { display: grid; gap: 16px; align-content: start; }
+
+.pos { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+
+.po-row {
+  display: grid;
+  grid-template-columns: 62px minmax(50px, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.po-ref { font-family: var(--mono); font-size: 11.5px; }
+
+.po-track {
+  height: 9px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.po-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  border-radius: 4px;
+  transition: width .4s ease;
+}
+
+.po-row.is-near .po-fill { background: #d8a008; }
+.po-row.is-over .po-fill { background: var(--reject); }
+
+.po-pct {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.po-vendor {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--ink-4);
+  margin-top: -4px;
+}
+
+.po-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--reject);
+  background: var(--reject-bg);
+  border-radius: var(--pill);
+  padding: 2px 7px;
+}
+
+.chart-foot { margin: 14px 0 0; font-size: 11.5px; color: var(--ink-4); }
+
+/* ----- vendor strip -------------------------------------------------------- */
+
+.vendors-strip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 26px;
+}
+
+.vendors-strip:empty { display: none; }
+
+.vs-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.vs-head h3 { font-size: 15px; font-weight: 500; letter-spacing: -.02em; }
+.vs-note { font-size: 12.5px; color: var(--ink-4); }
+
+.vs-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+.vs-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  padding: 5px 12px;
+}
+
+.vs-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #1f8a63; flex: none;
+}
+
+.vs-item.is-blocked { background: var(--reject-bg); border-color: var(--reject-br); color: var(--reject); }
+.vs-item.is-blocked .vs-dot { background: var(--reject); }
+
+.vs-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 1100px) {

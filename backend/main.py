@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from . import config as config_mod, db, explain, pipeline, rules, seed, state
 from .config import (
+    DATA_DIR,
     EXTRACTION_EFFORT,
     EXTRACTION_MODE,
     FRONTEND_DIR,
@@ -419,6 +420,16 @@ async def run_events(run_id: str, request: Request) -> StreamingResponse:
 @app.get("/api/samples")
 def list_samples() -> list[dict]:
     return seed.describe_samples()
+
+
+@app.get("/api/thumbs/{name}")
+def get_thumb(name: str) -> FileResponse:
+    """A rendered PNG of one invoice layout, for the Layouts gallery."""
+    safe = Path(name).name
+    path = DATA_DIR / "thumbs" / safe
+    if path.suffix.lower() != ".png" or not path.exists():
+        raise HTTPException(404, f"thumbnail '{safe}' not found")
+    return FileResponse(str(path), media_type="image/png")
 
 
 @app.get("/api/samples/{name}/file")

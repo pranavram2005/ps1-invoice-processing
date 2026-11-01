@@ -1153,6 +1153,32 @@
 
 
 
+
+  /** Who we are allowed to pay. Small, but the question "which vendors are on
+   *  the master?" was previously only answerable three clicks away. */
+  async function renderVendorStrip() {
+    const node = $('#vendors-strip');
+    if (!node) return;
+    try {
+      const vendors = await api('/api/vendors');
+      const blocked = vendors.filter((v) => v.status !== 'approved').length;
+      node.innerHTML = `
+        <div class="vs-head">
+          <h3>Approved vendors</h3>
+          <span class="vs-note">${vendors.length} on the master${
+            blocked ? ` · ${blocked} blocked` : ''}. Only these can be paid - rule R3.</span>
+        </div>
+        <div class="vs-list">${vendors.map((v) => `
+          <span class="vs-item ${v.status !== 'approved' ? 'is-blocked' : ''}"
+                data-tip="${esc(`<div class="tt-head">${v.name}</div>${v.vendor_id} · GSTIN ${v.gstin || '—'}`
+                  + (v.status !== 'approved' ? '<br>Blocked: invoices from this vendor are rejected.' : ''))}">
+            <i class="vs-dot"></i>${esc(v.name)}${
+              v.status !== 'approved' ? '<b class="vs-tag">blocked</b>' : ''}
+          </span>`).join('')}</div>`;
+      bindTooltips(node);
+    } catch (_) { node.innerHTML = ''; }
+  }
+
   // ----------------------------------------------------------------- layouts
 
   /* Why this tab exists: "it extracts invoices" means little until you see that
@@ -1214,18 +1240,19 @@
       const first = items[0];
       return `
       <article class="lay">
-        <div class="lay-doc">
-          <iframe src="/api/samples/${encodeURIComponent(first.file)}/file#toolbar=0&navpanes=0&scrollbar=0&view=Fit"
-                  title="${esc(note.vendor)} invoice"></iframe>
-        </div>
+        <button class="lay-doc" type="button" data-sample="${esc(first.file)}"
+                title="Run ${esc(first.title)}">
+          <img src="/api/thumbs/${esc(key)}.png" alt="Top of a ${esc(note.vendor)} invoice"
+               loading="lazy" width="794" height="560">
+        </button>
         <div class="lay-body">
           <h3 class="lay-vendor">${esc(note.vendor)}</h3>
-          <dl class="lay-dl">
-            <div><dt>Shape</dt><dd>${esc(note.shape)}</dd></div>
-            <div><dt>Tax</dt><dd>${esc(note.tax)}</dd></div>
-            <div><dt>PO reference</dt><dd>${esc(note.po)}</dd></div>
-          </dl>
+          <p class="lay-shape">${esc(note.shape)}</p>
           <p class="lay-hard">${esc(note.hard)}</p>
+          <dl class="lay-dl">
+            <div><dt>Tax</dt><dd>${esc(note.tax)}</dd></div>
+            <div><dt>PO</dt><dd>${esc(note.po)}</dd></div>
+          </dl>
           <div class="lay-runs">
             ${items.map((s) => `<button class="chip chip-run" type="button"
                  data-sample="${esc(s.file)}">${esc(s.title)} ${decisionBadge(s.expected)}</button>`).join('')}
@@ -1234,7 +1261,7 @@
       </article>`;
     }).join('');
 
-    $$('.chip-run', node).forEach((b) => b.addEventListener('click', () => runSample(b.dataset.sample)));
+    $$('[data-sample]', node).forEach((b) => b.addEventListener('click', () => runSample(b.dataset.sample)));
     node.dataset.loaded = '1';
   }
 
@@ -1267,17 +1294,69 @@
     const done = runs.filter((r) => r.decision);
     if (!done.length) { node.innerHTML = ''; return; }
 
+    // Two columns. The left one stacks the outcome split above the purchase-order
+    // ledger, which is both the natural pairing - what happened, against what it
+    // was billed to - and what stops the column running short beside the rule
+    // chart.
     node.innerHTML = `
-      <section class="chart">
-        <h3 class="chart-h">Where invoices ended up</h3>
-        <p class="chart-sub">${done.length} processed. The approved ones are invoices nobody had to open.</p>
-        ${decisionBar(done)}
-      </section>
+      <div class="chart-col">
+        <section class="chart">
+          <h3 class="chart-h">Where invoices ended up</h3>
+          <p class="chart-sub">${done.length} processed. The approved ones are invoices nobody had to open.</p>
+          ${decisionBar(done)}
+        </section>
+        <section class="chart" id="po-chart">
+          <h3 class="chart-h">Purchase orders, and how much is left</h3>
+          <p class="chart-sub">The budget each invoice is billed against. Rule R6 reads this ledger.</p>
+          <div id="po-bars"><p class="chart-empty">Loading…</p></div>
+        </section>
+      </div>
       <section class="chart">
         <h3 class="chart-h">Which checks caught something</h3>
         <p class="chart-sub">Counts every time a check failed, across all ${done.length} invoices.</p>
         ${ruleBars(done)}
       </section>`;
+    renderPoBars();
+  }
+
+  /** The PO ledger as a chart: how much of each budget is spoken for.
+   *
+   *  This is the data R6 decides on, so showing it here is not decoration - a
+   *  reviewer looking at "this over-consumes the PO" can see the whole ledger
+   *  in one place. Over-consumption is a *state*, so it takes a status colour
+   *  and a word, never colour alone.
+   */
+  async function renderPoBars() {
+    const node = $('#po-bars');
+    if (!node) return;
+    try {
+      const pos = await api('/api/pos');
+      const rows = pos
+        .map((po) => ({ ...po, pct: po.po_value ? (po.already_billed / po.po_value) * 100 : 0 }))
+        .sort((a, b) => b.pct - a.pct)
+        .slice(0, 7);
+      if (!rows.length) { node.innerHTML = '<p class="chart-empty">No purchase orders.</p>'; return; }
+
+      node.innerHTML = `<ul class="pos">${rows.map((po) => {
+        const over = po.pct >= 100;
+        const near = !over && po.pct >= 80;
+        return `
+        <li class="po-row ${over ? 'is-over' : near ? 'is-near' : ''}"
+            data-tip="${esc(`<div class="tt-head">${po.po_number}</div>`
+              + `${po.vendor_name || ''}<br>${po.description || ''}<br>`
+              + `billed ${money(po.already_billed, 'INR')} of ${money(po.po_value, 'INR')}`)}">
+          <a class="reclink po-ref" href="#" data-po="${esc(po.po_number)}">${esc(po.po_number)}</a>
+          <span class="po-track"><span class="po-fill" style="width:${Math.min(po.pct, 100)}%"></span></span>
+          <span class="po-pct">${po.pct.toFixed(0)}%</span>
+          <span class="po-vendor">${esc((po.vendor_name || '').replace(/ (Private Limited|LLP|Services|and Packaging)$/, ''))}
+            ${over ? '<b class="po-tag">fully billed</b>' : ''}</span>
+        </li>`;
+      }).join('')}</ul>
+      <p class="chart-foot">Showing ${rows.length} of ${pos.length}. Open any PO for the invoices that consumed it.</p>`;
+      bindTooltips(node);
+    } catch (err) {
+      node.innerHTML = '<p class="chart-empty">Could not load purchase orders.</p>';
+    }
   }
 
   /** One 100% stacked bar: the whole queue, split by outcome. */
@@ -1342,6 +1421,7 @@
       state.runs = runs;
       renderTiles(stats);
       renderCharts(runs);
+      renderVendorStrip();
       renderRunsTable();
     } catch (err) {
       toast(`Dashboard failed to load: ${err.message}`, true);
