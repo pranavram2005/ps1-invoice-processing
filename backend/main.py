@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -459,9 +460,47 @@ async def run_sample(name: str) -> dict:
     path = SAMPLE_INVOICE_DIR / safe
     if path.suffix.lower() != ".pdf" or not path.exists():
         raise HTTPException(404, f"sample '{safe}' not found")
+    pdf_bytes = path.read_bytes()
+    # A prepared scenario advertises the verdict it earns on a clean slate, so
+    # give it one: drop this file's own earlier runs (and the PO budget they
+    # booked) before running. Without this, every scenario returns REJECT on a
+    # second click - R7 and R6 reporting correctly on a promise the label had
+    # already broken. Only the identical file is cleared, so scenarios that
+    # depend on a *different* file being in history are untouched, and an
+    # arbitrary upload still gets the full duplicate check.
+    meta = next((x for x in seed.describe_samples() if x["file"] == safe), {})
+
+    cleared = db.delete_runs_by_hash(hashlib.sha256(pdf_bytes).hexdigest())
+    # Some scenarios are only meaningful relative to another. `resets` names the
+    # files whose history would stop this one reaching its advertised verdict;
+    # `requires` names the one that has to be in history first for it to mean
+    # anything at all. Both are declared in the sample catalogue rather than
+    # inferred, because the relation is not symmetric.
+    for other in meta.get("resets", []):
+        other_path = SAMPLE_INVOICE_DIR / Path(other).name
+        if other_path.exists():
+            cleared += db.delete_runs_by_hash(
+                hashlib.sha256(other_path.read_bytes()).hexdigest()
+            )
+
+    prerequisite = meta.get("requires")
+    if prerequisite:
+        pre_path = SAMPLE_INVOICE_DIR / Path(prerequisite).name
+        if pre_path.exists():
+            pre_bytes = pre_path.read_bytes()
+            pre_hash = hashlib.sha256(pre_bytes).hexdigest()
+            if db.find_run_by_hash(pre_hash) is None:
+                pre_id = pipeline.new_run_id()
+                pre = pipeline.start(
+                    pre_id, Path(prerequisite).name, pre_bytes, state.current(), replay=False,
+                )
+                # Awaited, not scheduled: the dependent run's verdict depends on
+                # this one already being in history.
+                await pre.run()
+
     run_id = pipeline.new_run_id()
-    _schedule(run_id, safe, path.read_bytes(), replay=False)
-    return {"run_id": run_id, "filename": safe}
+    _schedule(run_id, safe, pdf_bytes, replay=False)
+    return {"run_id": run_id, "filename": safe, "cleared_prior_runs": cleared}
 
 
 # --------------------------------------------------------------------------- #

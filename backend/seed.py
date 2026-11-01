@@ -124,7 +124,7 @@ SAMPLES: list[dict] = [
         "title": "Clean invoice, matched PO",
         "scenario": "happy_path",
         "expected": "APPROVE",
-        "why": "Everything reconciles: approved vendor, PO named explicitly, total inside tolerance.",
+        "why": "Approved vendor, PO named, total inside tolerance.",
         "order": 1,
     },
     {
@@ -132,10 +132,7 @@ SAMPLES: list[dict] = [
         "title": "Split invoice against one PO",
         "scenario": "split_po",
         "expected": "REJECT",
-        "why": (
-            "Six lakh against a ten lakh PO that already has five lakh billed. Each invoice is "
-            "fine alone; only the cumulative ledger (R6) catches it. Proves the system has state."
-        ),
+        "why": "Fine on its own; the PO's running total is what catches it (R6).",
         "order": 2,
     },
     {
@@ -143,31 +140,32 @@ SAMPLES: list[dict] = [
         "title": "Nalanda original (run this before the re-issue)",
         "scenario": "duplicate_setup",
         "expected": "APPROVE",
-        "why": "The legitimate first submission. Needed so the near-duplicate has something to match.",
+        "why": "The legitimate first submission, so the re-issue has something to match.",
         "order": 3,
+        # This invoice and the re-issue below near-match each other, and the
+        # relation is symmetric: with the re-issue already in history, running
+        # the original would flag against it and never show the APPROVE it
+        # advertises. Re-running the original therefore resets the pair.
+        "resets": ["INV-NL-127_nalanda_reissue.pdf"],
     },
     {
         "file": "INV-NL-127_nalanda_reissue.pdf",
         "title": "Near-duplicate re-issue",
         "scenario": "near_duplicate",
         "expected": "FLAG",
-        "why": (
-            "Same vendor, same amount, same date, different invoice number. A hash check sees "
-            "nothing; the fuzzy duplicate rule (R7) catches it. Duplicate payment is the most "
-            "expensive AP failure mode there is."
-        ),
+        "why": "Same vendor, amount and date, new invoice number. A hash check misses it (R7).",
         "order": 4,
+        # The reverse does not hold: this scenario only means anything when the
+        # original is already in history, so running it must leave that alone.
+        # It is run first if it is missing.
+        "requires": "INV-NL-118_nalanda_original.pdf",
     },
     {
         "file": "INV-KAV-7731_kaveri_scanned.pdf",
         "title": "Scanned, image-only PDF",
         "scenario": "scanned",
         "expected": "FLAG",
-        "why": (
-            "No text layer at all, so no extracted value can be verified against the file. "
-            "Confidence drops below the floor and R9 demands a human - even though every other "
-            "check passes. The right behaviour is to be less certain, not to fail."
-        ),
+        "why": "No text layer, so nothing can be verified. Confidence drops and R9 asks for a human.",
         "order": 5,
     },
     {
@@ -175,11 +173,7 @@ SAMPLES: list[dict] = [
         "title": "No PO reference anywhere",
         "scenario": "missing_po",
         "expected": "FLAG",
-        "why": (
-            "Falls back to vendor + amount + date matching and surfaces ranked candidates. An "
-            "inferred PO is capped below the match floor by design, so it always reaches a human "
-            "- escalating with the work already done instead of guessing."
-        ),
+        "why": "No PO printed. Falls back to vendor, amount and date, then escalates (R4).",
         "order": 6,
     },
     {
@@ -187,7 +181,7 @@ SAMPLES: list[dict] = [
         "title": "Tolerance boundary: 1.8% over",
         "scenario": "tolerance_inside",
         "expected": "APPROVE",
-        "why": "Inside the 2% PO tolerance, approved with the variance stated. Half of the live tolerance demo.",
+        "why": "1.8% over the PO, inside the 2% tolerance.",
         "order": 7,
     },
     {
@@ -195,10 +189,7 @@ SAMPLES: list[dict] = [
         "title": "Tolerance boundary: 7.5% over",
         "scenario": "tolerance_outside",
         "expected": "FLAG",
-        "why": (
-            "Over the 2% tolerance but inside the 10% reject threshold. Raise the tolerance in "
-            "the Admin tab, replay, and this flips to APPROVE."
-        ),
+        "why": "7.5% over: past tolerance, short of rejection (R5).",
         "order": 8,
     },
     {
@@ -206,10 +197,7 @@ SAMPLES: list[dict] = [
         "title": "Invoice that does not add up",
         "scenario": "arithmetic",
         "expected": "FLAG",
-        "why": (
-            "Line items plus tax disagree with the stated total. The model was told to report "
-            "the printed figure and never to correct it, which is the only reason R2 can see this."
-        ),
+        "why": "Line items plus tax disagree with the printed total (R2).",
         "order": 9,
     },
     {
@@ -217,12 +205,7 @@ SAMPLES: list[dict] = [
         "title": "Tolerance boundary, 18% over",
         "scenario": "over_reject",
         "expected": "REJECT",
-        "why": (
-            "The far side of R5. Invoice 7 is inside tolerance and invoice 8 sits in the band "
-            "between tolerance and rejection; this one is past the reject threshold, so the same "
-            "rule returns a different severity. Nothing is billed against PO-4480, which keeps "
-            "R6 out of it."
-        ),
+        "why": "18% over the PO, past the reject threshold (R5).",
         "order": 10,
     },
     {
@@ -230,11 +213,7 @@ SAMPLES: list[dict] = [
         "title": "Vendor on the master but blocked",
         "scenario": "blocked_vendor",
         "expected": "REJECT",
-        "why": (
-            "Resolution matches this vendor confidently on GSTIN and then finds the block, which "
-            "is a different stage-4 payload from a vendor nobody can identify. A blocked vendor "
-            "also has no open PO, so R4 flags alongside R3."
-        ),
+        "why": "Known vendor, blocked for payment (R3).",
         "order": 11,
     },
     {
@@ -242,11 +221,7 @@ SAMPLES: list[dict] = [
         "title": "Vendor not on the master at all",
         "scenario": "unknown_vendor",
         "expected": "REJECT",
-        "why": (
-            "No GSTIN match and no name above the fuzzy floor, so the vendor cannot be identified "
-            "at all - the contrast case for the blocked vendor above. Paying an unrecognised "
-            "payee is the failure mode R3 exists to prevent."
-        ),
+        "why": "Vendor not on the approved list at all (R3).",
         "order": 12,
     },
     {
@@ -254,11 +229,7 @@ SAMPLES: list[dict] = [
         "title": "Invoice surfaced months late",
         "scenario": "stale_date",
         "expected": "FLAG",
-        "why": (
-            "Dated beyond the 180-day staleness limit, as a bill that never reached accounts "
-            "genuinely would be. The amount is under its PO and nothing else is wrong, so R8 "
-            "fires on its own."
-        ),
+        "why": "Dated beyond the 180-day staleness limit (R8).",
         "order": 13,
     },
     {
@@ -266,11 +237,7 @@ SAMPLES: list[dict] = [
         "title": "No invoice number printed",
         "scenario": "missing_number",
         "expected": "FLAG",
-        "why": (
-            "The invoice number field is blank on the page. R1 grades this a flag rather than a "
-            "rejection because the vendor and the total - the two fields you cannot pay without - "
-            "are both there. An unreferenceable invoice is a bookkeeping problem, not a fraud signal."
-        ),
+        "why": "No invoice number printed (R1).",
         "order": 14,
     },
 ]

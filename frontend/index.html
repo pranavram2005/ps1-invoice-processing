@@ -41,27 +41,9 @@
 
     <!-- State 1: nothing running. The upload is the page. -->
     <div class="intake" id="run-intake">
-      <p class="intake-eyebrow">Accounts payable &middot; invoice approval</p>
       <h2 class="intake-h">Check an invoice</h2>
-      <p class="intake-sub">A clerk checking an invoice by hand opens the PDF, finds the purchase
-         order, checks the total against it, checks it has not already been paid, and decides.
-         This does all of it in about ten seconds and shows its working.
-         You get <b>approve</b>, <b>flag</b> or <b>reject</b> &mdash; with the rule that decided
-         it and every figure traced back to the page it was read from.</p>
-
-      <!-- What is about to happen, before it happens. Seeing the seven stages up
-           front is what makes the live run legible rather than a progress bar. -->
-      <ol class="howto" aria-label="The seven stages">
-        <li><span>1</span>Read the file</li>
-        <li><span>2</span>Extract fields</li>
-        <li><span>3</span>Verify against the page</li>
-        <li><span>4</span>Resolve vendor</li>
-        <li><span>5</span>Match the PO</li>
-        <li><span>6</span>Apply 9 rules</li>
-        <li><span>7</span>Decide</li>
-      </ol>
-      <p class="howto-note">Only step 2 uses a model. Everything that decides anything is
-         plain code against published thresholds, so the same invoice always gets the same answer.</p>
+      <p class="intake-sub">Finds the purchase order, checks the total against it, checks it
+         has not already been paid &mdash; then approves, flags or rejects, and shows why.</p>
 
       <div class="dropzone" id="dropzone" tabindex="0" role="button"
            aria-label="Drop an invoice PDF here or click to choose a file">
@@ -78,8 +60,6 @@
 
       <div class="try">
         <div class="try-rule"><span>or run a prepared invoice</span></div>
-        <p class="try-lede">Fourteen invoices, each built to take a <em>different</em> path through the
-           rules. Start with the happy path, then pick an edge case to see where it refuses.</p>
         <div class="scenarios" id="scenario-groups"></div>
       </div>
     </div>

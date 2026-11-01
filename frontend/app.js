@@ -136,6 +136,63 @@
 
   // -------------------------------------------------------------------- tabs
 
+  /** A jump list for pages that are taller than a screen.
+   *
+   *  Rules & data stacks seven sections into nearly three thousand pixels, and
+   *  the only way to a given one was to scroll and recognise it. The strip is
+   *  built from whatever `.card > .card-head > h2` headings the panel actually
+   *  has, so it cannot list a section that is not there or miss one that is.
+   *  Panels short enough to take in at once do not get one.
+   */
+  function buildSectionNav(panel) {
+    const existing = $('.subnav', panel);
+    if (existing) existing.remove();
+
+    const cards = $$('.card', panel).filter((card) => $('.card-head h2', card));
+    if (cards.length < 3) return;
+
+    const nav = document.createElement('nav');
+    nav.className = 'subnav';
+    nav.setAttribute('aria-label', 'Sections on this page');
+    cards.forEach((card, i) => {
+      const heading = $('.card-head h2', card);
+      if (!card.id) card.id = `sec-${panel.id}-${i}`;
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'subnav-link';
+      link.textContent = heading.textContent.trim();
+      link.addEventListener('click', () => {
+        // Offset by the fixed header, or the heading lands underneath it.
+        const top = card.getBoundingClientRect().top + window.scrollY - 92;
+        window.scrollTo({ top, behavior: 'smooth' });
+      });
+      nav.appendChild(link);
+    });
+
+    const head = $('.sec-head', panel);
+    if (head && head.nextSibling) panel.insertBefore(nav, head.nextSibling);
+    else panel.insertBefore(nav, panel.firstChild);
+
+    // Mark whichever section is currently in view.
+    const marks = $$('.subnav-link', nav);
+    const spy = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const i = cards.indexOf(entry.target);
+        marks.forEach((m, j) => m.classList.toggle('is-here', j === i));
+      });
+    }, { rootMargin: '-90px 0px -65% 0px' });
+    cards.forEach((card) => spy.observe(card));
+
+    // The last section can never reach the observer's band: the page bottoms
+    // out first, so scrolling to the end would leave the previous link marked.
+    window.addEventListener('scroll', () => {
+      if (!panel.classList.contains('is-active')) return;
+      const atEnd = window.innerHeight + window.scrollY >= document.body.scrollHeight - 4;
+      if (atEnd) marks.forEach((m, j) => m.classList.toggle('is-here', j === marks.length - 1));
+    }, { passive: true });
+  }
+
   function showTab(name) {
     $$('.nav-link').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.tab === name));
     $$('.panel').forEach((panel) => panel.classList.toggle('is-active', panel.id === `panel-${name}`));
@@ -269,58 +326,34 @@
     // the one thing the UI would not tell them. The grouping is the answer to
     // "which of these is the normal one?".
     const GROUPS = [
-      {
-        key: 'happy',
-        title: 'Happy path',
-        blurb: 'Nothing is wrong with these. They should sail through, and they do.',
-        match: (s) => s.expected === 'APPROVE',
-      },
-      {
-        key: 'edge',
-        title: 'Edge cases',
-        blurb: 'Each one breaks a different rule. This is where the system earns its keep - '
-             + 'the interesting question is not whether it reads a clean invoice, but what it '
-             + 'does with a bad one.',
-        match: (s) => s.expected !== 'APPROVE',
-      },
+      { key: 'happy', title: 'Happy path', match: (s) => s.expected === 'APPROVE' },
+      { key: 'edge', title: 'Edge cases', match: (s) => s.expected !== 'APPROVE' },
     ];
 
     node.innerHTML = GROUPS.map((group) => {
       const items = state.samples.filter(group.match).sort((a, b) => a.order - b.order);
       if (!items.length) return '';
+      // One row per scenario, divided by a hairline. Cards gave fourteen
+      // equal-weight boxes and turned the page into a wall; a list is read
+      // top to bottom, which is how someone picks one.
       return `
-        <section class="sgroup sgroup-${group.key}">
-          <div class="sgroup-head">
-            <h3>${esc(group.title)} <span class="sgroup-n">${items.length}</span></h3>
-            <p>${esc(group.blurb)}</p>
-          </div>
-          <div class="sgrid">${items.map((s) => `
-            <article class="scard" data-file="${esc(s.file)}" tabindex="0" role="button"
-                     aria-label="Run ${esc(s.title)}, expects ${esc(s.expected)}">
-              <div class="scard-top">
-                <span class="scard-title">${esc(s.title)}</span>
-                ${decisionBadge(s.expected)}
-              </div>
-              <p class="scard-why">${esc(s.why)}</p>
-              <div class="scard-foot">
-                <span class="scard-run">Run this →</span>
-                <a class="dl" href="/api/samples/${encodeURIComponent(s.file)}/file?download=1"
-                   download onclick="event.stopPropagation()">PDF</a>
-              </div>
-            </article>`).join('')}</div>
+        <section class="sgroup">
+          <h3 class="sgroup-head">${esc(group.title)}<span>${items.length}</span></h3>
+          <ul class="slist">${items.map((s) => `
+            <li class="srow" data-file="${esc(s.file)}" tabindex="0" role="button"
+                aria-label="Run ${esc(s.title)}, expects ${esc(s.expected)}">
+              <span class="srow-title">${esc(s.title)}</span>
+              <span class="srow-why">${esc(s.why)}</span>
+              ${decisionBadge(s.expected)}
+            </li>`).join('')}</ul>
         </section>`;
     }).join('');
 
-    $$('.scard', node).forEach((card) => {
-      const go = (e) => {
-        // The download link lives inside the card; clicking it must not also
-        // start a run.
-        if (e.target.closest('.dl')) return;
-        runSample(card.dataset.file);
-      };
-      card.addEventListener('click', go);
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); }
+    $$('.srow', node).forEach((row) => {
+      const go = () => runSample(row.dataset.file);
+      row.addEventListener('click', go);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
       });
     });
   }
@@ -1637,6 +1670,7 @@
       renderConfigForm(config);
       renderVendors(vendors);
       renderTelemetry(telemetry);
+      buildSectionNav($('#panel-admin'));
     } catch (err) {
       toast(`Admin failed to load: ${err.message}`, true);
     }
@@ -1849,11 +1883,11 @@
 
       <div class="budget-figs">
         ${fig('Committed', compactInr(t.value), money(t.value, 'INR'),
-              `across ${pos.length} purchase orders`)}
+              `${pos.length} purchase orders`)}
         ${fig('Billed to date', compactInr(t.billed), money(t.billed, 'INR'),
-              'what the ledger R6 reads already holds')}
+              `${pct.toFixed(1)}% of committed`)}
         ${fig('Still available', compactInr(available), money(available, 'INR'),
-              'headroom before R6 starts rejecting')}
+              'headroom left')}
       </div>
 
       <div class="budget-flags">
