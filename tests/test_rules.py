@@ -307,8 +307,9 @@ def test_split_invoice_over_consumes_po_and_rejects():
 
     assert r["R5"].passed, "each invoice alone looks fine against the PO"
     assert not r["R6"].passed and r["R6"].severity == "REJECT"
-    assert "1,100,000.00" in r["R6"].actual        # projected cumulative
-    assert "500,000.00" in r["R6"].actual          # already billed
+    # Indian grouping, currency marked: 11,00,000 not 1,100,000.
+    assert "₹11,00,000.00" in r["R6"].actual   # projected cumulative
+    assert "₹5,00,000.00" in r["R6"].actual    # already billed
     assert dec.decision == "REJECT"
 
 
@@ -340,8 +341,10 @@ def test_near_duplicate_reissue_flags_and_links_original():
     )
     r = by_id(results)["R7"]
     assert not r.passed and r.severity == "FLAG"
-    assert "RUN_20261025T090000" in r.message       # points at the original
-    assert "hash check would have missed" in r.message
+    assert "RUN_20261025T090000" in r.message       # the finding points at the original
+    # The explanation moved out of the finding and into the note, so the banner
+    # stays scannable. It must still be carried somewhere.
+    assert "hash check would have missed" in (r.note or "")
     assert dec.decision == "FLAG"
 
 

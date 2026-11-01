@@ -171,7 +171,12 @@ class RuleResult(BaseModel):
     severity: Severity                  # severity actually applied this run
     expected: str
     actual: str
+    # `message` is the finding: what failed, in one sentence, with the numbers.
+    # `note` is the commentary - why this case is interesting or how it is
+    # normally missed. Keeping them apart is what lets the decision banner
+    # stay scannable while the expanded rule still teaches.
     message: str
+    note: str | None = None
     skipped: bool = False
 
 
