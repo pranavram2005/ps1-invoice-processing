@@ -170,9 +170,26 @@ class RuleContext:
 
 
 def _money(value: float | None) -> str:
+    """Indian digit grouping with the currency marked.
+
+    A bare "500,000.00" in a decision reason makes the reader supply the
+    currency themselves, and western grouping reads wrong to anyone working
+    in lakhs. Everything here is INR (see the assumptions in README).
+    """
     if value is None:
         return "-"
-    return f"{value:,.2f}"
+    whole, _, frac = f"{abs(value):.2f}".partition(".")
+    if len(whole) > 3:
+        head, tail = whole[:-3], whole[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        whole = ",".join(parts + [tail])
+    sign = "-" if value < 0 else ""
+    return f"{sign}₹{whole}.{frac}"
 
 
 def _pass(rule: dict, expected: str, actual: str, message: str) -> RuleResult:
@@ -182,10 +199,13 @@ def _pass(rule: dict, expected: str, actual: str, message: str) -> RuleResult:
     )
 
 
-def _fail(rule: dict, severity: str, expected: str, actual: str, message: str) -> RuleResult:
+def _fail(rule: dict, severity: str, expected: str, actual: str, message: str,
+          note: str | None = None) -> RuleResult:
+    """`message` is the finding - one sentence, with the numbers that decided it.
+    `note` is optional commentary, shown under the finding rather than inside it."""
     return RuleResult(
         rule_id=rule["id"], title=rule["title"], passed=False, severity=severity,  # type: ignore[arg-type]
-        expected=expected, actual=actual, message=message,
+        expected=expected, actual=actual, message=message, note=note,
     )
 
 
@@ -352,9 +372,10 @@ def r6_cumulative_consumption(ctx: RuleContext) -> RuleResult:
                      f"{_money(headroom)} of headroom remains on {ctx.po.po_number} after this invoice.")
     return _fail(
         rule, "REJECT", expected, actual,
-        f"{ctx.po.po_number} already has {_money(billed)} billed against it; this invoice would take "
-        f"consumption to {_money(cumulative)} against a PO value of {_money(ctx.po_value)}. "
-        f"Each invoice looks acceptable on its own - only the running total catches this.",
+        f"{ctx.po.po_number} is already {_money(billed)} spent of {_money(ctx.po_value)}. "
+        f"This invoice would take it to {_money(cumulative)} - over by "
+        f"{_money(cumulative - allowed)}.",
+        note="Each invoice looks acceptable on its own; only the running total catches this.",
     )
 
 
@@ -365,14 +386,14 @@ def r7_not_duplicate(ctx: RuleContext) -> RuleResult:
     if ctx.exact_duplicate_run_id:
         return _fail(
             rule, "REJECT", expected, f"byte-identical to run {ctx.exact_duplicate_run_id}",
-            f"This exact file was already processed as run {ctx.exact_duplicate_run_id}. "
-            f"Paying it again is a duplicate payment.",
+            f"Byte-identical to run {ctx.exact_duplicate_run_id}, already processed.",
+            note="Paying this again would be a duplicate payment.",
         )
     if ctx.near_duplicate_run_id:
         return _fail(
             rule, "FLAG", expected, ctx.near_duplicate_detail or "near duplicate found",
-            f"Possible duplicate of run {ctx.near_duplicate_run_id}: {ctx.near_duplicate_detail}. "
-            f"The invoice number differs, so a hash check would have missed this.",
+            f"Looks like run {ctx.near_duplicate_run_id}: {ctx.near_duplicate_detail}.",
+            note="The invoice number differs, so a file-hash check would have missed this.",
         )
     return _pass(rule, expected, "no duplicate found", "No prior submission matches this invoice.")
 
@@ -468,9 +489,12 @@ def decide(results: list[RuleResult], confidence: ConfidenceBreakdown) -> Decisi
         decision = "APPROVE"
         headline = f"Approved: all {len(applied)} applicable checks passed.{skipped_note}"
 
+    # The finding, not the rule's own title. "R6 - Cumulative billing does not
+    # over-consume the PO: <message>" restates the rule name the reader can
+    # already see next to it and pushes the actual numbers off the first line.
     reasons = [headline]
     for r in rejects + flags:
-        reasons.append(f"{r.rule_id} - {r.title}: {r.message}")
+        reasons.append(f"{r.rule_id}: {r.message}")
     if decision == "APPROVE":
         reasons.append(
             f"Extraction confidence {confidence.final:.2f}; {confidence.explanation}."

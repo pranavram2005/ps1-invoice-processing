@@ -256,34 +256,73 @@
     } catch (err) {
       state.samples = [];
     }
-    // One <select> rather than a wall of cards. Fourteen scenarios is a useful
-    // amount of test coverage and a terrible amount of landing page: it buried
-    // the actual task under a menu most visitors never need.
-    const select = $('#sample-select');
-    const why = $('#sample-why');
+    const node = $('#scenario-groups');
     if (!state.samples.length) {
-      select.innerHTML = '<option>No bundled samples found</option>';
-      select.disabled = true;
-      $('#sample-run').disabled = true;
-      why.textContent = 'Generate them with: node tools/invoice_gen/generate.js';
+      node.innerHTML = '<p class="hint">No bundled samples found. Generate them with: '
+        + '<code>node tools/invoice_gen/generate.js</code></p>';
       return;
     }
-    select.innerHTML = state.samples
-      .map((s) => `<option value="${esc(s.file)}">${esc(s.title)} — expects ${esc(s.expected)}</option>`)
-      .join('');
 
-    // Also offer the file itself. Someone evaluating this from a deployed URL
-    // has no repository to dig a test PDF out of, and "upload an invoice" is a
-    // hard instruction to follow with no invoice to hand.
-    const describe = () => {
-      const picked = state.samples[select.selectedIndex];
-      if (!picked) { why.textContent = ''; return; }
-      why.innerHTML = `${esc(picked.why)}
-        <a class="dl" href="/api/samples/${encodeURIComponent(picked.file)}/file?download=1"
-           download>Download this PDF</a>`;
-    };
-    select.addEventListener('change', describe);
-    describe();
+    // Grouped, not a dropdown. Fourteen scenarios in one <select> gave the
+    // clean invoice and the broken ones identical weight, so the one thing a
+    // reviewer is told to look for - the happy path, then an edge case - was
+    // the one thing the UI would not tell them. The grouping is the answer to
+    // "which of these is the normal one?".
+    const GROUPS = [
+      {
+        key: 'happy',
+        title: 'Happy path',
+        blurb: 'Nothing is wrong with these. They should sail through, and they do.',
+        match: (s) => s.expected === 'APPROVE',
+      },
+      {
+        key: 'edge',
+        title: 'Edge cases',
+        blurb: 'Each one breaks a different rule. This is where the system earns its keep - '
+             + 'the interesting question is not whether it reads a clean invoice, but what it '
+             + 'does with a bad one.',
+        match: (s) => s.expected !== 'APPROVE',
+      },
+    ];
+
+    node.innerHTML = GROUPS.map((group) => {
+      const items = state.samples.filter(group.match).sort((a, b) => a.order - b.order);
+      if (!items.length) return '';
+      return `
+        <section class="sgroup sgroup-${group.key}">
+          <div class="sgroup-head">
+            <h3>${esc(group.title)} <span class="sgroup-n">${items.length}</span></h3>
+            <p>${esc(group.blurb)}</p>
+          </div>
+          <div class="sgrid">${items.map((s) => `
+            <article class="scard" data-file="${esc(s.file)}" tabindex="0" role="button"
+                     aria-label="Run ${esc(s.title)}, expects ${esc(s.expected)}">
+              <div class="scard-top">
+                <span class="scard-title">${esc(s.title)}</span>
+                ${decisionBadge(s.expected)}
+              </div>
+              <p class="scard-why">${esc(s.why)}</p>
+              <div class="scard-foot">
+                <span class="scard-run">Run this →</span>
+                <a class="dl" href="/api/samples/${encodeURIComponent(s.file)}/file?download=1"
+                   download onclick="event.stopPropagation()">PDF</a>
+              </div>
+            </article>`).join('')}</div>
+        </section>`;
+    }).join('');
+
+    $$('.scard', node).forEach((card) => {
+      const go = (e) => {
+        // The download link lives inside the card; clicking it must not also
+        // start a run.
+        if (e.target.closest('.dl')) return;
+        runSample(card.dataset.file);
+      };
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); }
+      });
+    });
   }
 
   // --------------------------------------------------------- starting a run
@@ -752,6 +791,7 @@
           <div>
             <div class="rule-title">${esc(rule.title)}</div>
             <div class="rule-msg">${esc(rule.message)}</div>
+            ${rule.note ? `<div class="rule-note">${esc(rule.note)}</div>` : ''}
             ${rule.skipped ? '' : `<div class="rule-ea">
               <span>expected <b>${esc(rule.expected)}</b></span>
               <span>actual <b>${esc(rule.actual)}</b></span></div>`}
@@ -2087,10 +2127,6 @@
         envBtn.setAttribute('aria-expanded', String(!pop.hidden));
       });
     }
-    $('#sample-run').addEventListener('click', () => {
-      const select = $('#sample-select');
-      if (select && select.value) runSample(select.value);
-    });
     $('#back-btn').addEventListener('click', () => {
       if (state.source) { state.source.close(); state.source = null; }
       showResultView(false);
