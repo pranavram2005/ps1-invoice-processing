@@ -18,11 +18,12 @@
   </a>
 
   <nav class="nav-links" role="tablist" aria-label="Sections">
-    <button class="nav-link is-active" data-tab="run" role="tab">Run</button>
-    <button class="nav-link" data-tab="dashboard" role="tab">Dashboard</button>
+    <button class="nav-link is-active" data-tab="dashboard" role="tab">Dashboard</button>
+    <button class="nav-link" data-tab="run" role="tab">Check an invoice</button>
     <button class="nav-link" data-tab="pos" role="tab">Purchase orders</button>
     <button class="nav-link" data-tab="layouts" role="tab">Layouts</button>
     <button class="nav-link" data-tab="admin" role="tab">Rules &amp; data</button>
+    <button class="nav-link" data-tab="how" role="tab">How it works</button>
   </nav>
 
   <div class="nav-right">
@@ -37,7 +38,7 @@
 <main>
 
   <!-- ==================================================== RUN ============ -->
-  <section class="panel is-active" id="panel-run">
+  <section class="panel" id="panel-run">
 
     <!-- State 1: nothing running. The upload is the page. -->
     <div class="intake" id="run-intake">
@@ -76,12 +77,52 @@
         </div>
       </div>
 
+      <!-- Only present for a generated test invoice: what this file was built
+           to demonstrate, so the verdict can be read against a stated
+           expectation rather than taken on trust. -->
+      <div class="intent" id="run-intent" hidden></div>
+
       <!-- Phase tracker. The research point: show progress across named phases,
            not bytes, so a slow stage never reads as a stall. -->
       <ol class="tracker" id="tracker" aria-label="Processing stages"></ol>
 
       <!-- What the live stage is actually doing, in a sentence. -->
       <p class="now" id="now-doing" hidden></p>
+
+      <!-- The seven stages, as they happen. This is the first thing on the
+           page rather than something folded away at the bottom: watching the
+           work is the point of the run view, and each step says in a sentence
+           what it is for and what it actually found. -->
+      <section class="story" id="run-detail" hidden>
+        <div class="story-head">
+          <!-- The heading is the collapse control for the whole panel. Two
+               buttons side by side - one to fold the section, one to expand
+               the step payloads inside it - read as alternatives rather than
+               as different scales of the same thing. -->
+          <button class="story-toggle" id="story-toggle" type="button"
+                  aria-expanded="true" aria-controls="story-body">
+            <svg class="story-caret" viewBox="0 0 12 8" width="11" height="7" aria-hidden="true">
+              <path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor"
+                    stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>
+              <span class="story-h" id="story-title">How this is being processed</span>
+              <span class="story-sub">
+                <span class="story-sub-open">Seven steps, in order. Each one says what it does,
+                   what it found, and &mdash; if you want it &mdash; everything it produced.</span>
+                <span class="story-sub-shut" id="story-summary"></span>
+              </span>
+            </span>
+          </button>
+          <div class="story-right">
+            <div class="run-meta" id="run-meta"></div>
+            <button class="btn btn-ghost btn-sm" id="expand-btn" type="button">Expand all</button>
+          </div>
+        </div>
+        <div class="story-body" id="story-body">
+          <ol class="timeline" id="timeline"></ol>
+        </div>
+      </section>
 
       <!-- the answer -->
       <div class="verdict" id="decision" hidden></div>
@@ -104,28 +145,21 @@
         </div>
       </div>
 
-      <!-- graded detail, one click away rather than in the way -->
-      <details class="detail" id="run-detail" hidden>
-        <summary>
-          <span>How this was processed</span>
-          <span class="detail-note">all seven stages, with what each one produced</span>
-        </summary>
-        <div class="detail-body">
-          <div class="detail-bar">
-            <div class="run-meta" id="run-meta"></div>
-            <button class="btn btn-ghost btn-sm" id="expand-btn" type="button">Expand all</button>
-          </div>
-          <div class="timeline" id="timeline"></div>
-        </div>
-      </details>
     </div>
   </section>
 
   <!-- ============================================== DASHBOARD ============ -->
-  <section class="panel" id="panel-dashboard">
-    <div class="sec-head">
-      <h2>How the queue is running</h2>
-      <p class="sec-sub">Every invoice processed so far, and what happened to it.</p>
+  <section class="panel is-active" id="panel-dashboard">
+    <div class="sec-head sec-head-cta">
+      <div>
+        <h2>How the queue is running</h2>
+        <p class="sec-sub">Every invoice processed so far, and what happened to it. Each row is a
+           complete audit record &mdash; open one to replay all seven stages exactly as they ran.</p>
+      </div>
+      <div class="sec-cta">
+        <button class="btn btn-primary" data-goto="run" type="button">Check an invoice</button>
+        <button class="btn btn-ghost" data-goto="pos" type="button">Raise a purchase order</button>
+      </div>
     </div>
 
     <div class="tiles" id="tiles"></div>
@@ -174,6 +208,93 @@
          over-consumed it. Open any row for the individual invoices that spent it.</p>
     </div>
 
+    <div class="card card-npo" id="new-po-card">
+      <div class="card-head">
+        <h2>Raise a purchase order</h2>
+        <p class="hint">Anything added here is written to the same <code>pos</code> table the
+           pipeline matches against, tagged <code>source=user</code> so it stays visually
+           separate from the twelve seeded demo POs &mdash; look for the
+           <span class="po-mine">added by you</span> tag. Once it exists you can generate an
+           invoice against it and watch all seven stages decide it.</p>
+      </div>
+
+      <form class="npo-form" id="new-po-form" autocomplete="off">
+        <label class="field">
+          <span class="field-k">PO number</span>
+          <input class="input" id="np-number" type="text" required
+                 placeholder="PO-9001" maxlength="24" aria-describedby="np-number-h">
+          <span class="field-h" id="np-number-h">3&ndash;24 characters: letters, digits, dashes, slashes.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-k">Vendor</span>
+          <!-- A listbox of our own rather than a native <select>. The native
+               control's drop-down is drawn by the operating system: it cannot
+               carry a vendor's code, its tax number or an "added by you" tag,
+               and it looks like nothing else on the page. The value lives in a
+               hidden input so everything that reads the form is unchanged. -->
+          <div class="pick" id="np-vendor-pick">
+            <button class="input pick-btn" id="np-vendor-btn" type="button"
+                    aria-haspopup="listbox" aria-expanded="false"
+                    aria-describedby="np-vendor-h">
+              <span class="pick-val is-empty">Choose an approved vendor&hellip;</span>
+              <svg class="pick-caret" viewBox="0 0 12 8" width="11" height="7" aria-hidden="true">
+                <path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor"
+                      stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="pick-pop" id="np-vendor-pop" role="listbox"
+                 aria-label="Approved vendors" hidden></div>
+            <input type="hidden" id="np-vendor" value="">
+          </div>
+          <span class="field-h" id="np-vendor-h">Chosen from the approved master, never typed &mdash;
+             an invoice naming a vendor this system does not know can never be paid. Not on the
+             list? Pick <b>Add a new vendor</b>.</span>
+        </label>
+
+        <label class="field field-wide">
+          <span class="field-k">What it covers</span>
+          <input class="input" id="np-desc" type="text" maxlength="120"
+                 placeholder="Handrail fabrication &ndash; block C">
+          <span class="field-h">Printed on the generated invoice and shown on the row.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-k">PO value</span>
+          <span class="input-money">
+            <span class="input-pre">INR</span>
+            <input class="input" id="np-value" type="number" min="1000" step="1000"
+                   required placeholder="250000" aria-describedby="np-value-h">
+          </span>
+          <span class="field-h" id="np-value-h">The ceiling <b>R5</b> and <b>R6</b> are judged
+             against. From INR 1,000.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-k">Issued</span>
+          <input class="input" id="np-issued" type="date" required>
+          <span class="field-h">An invoice dated before this scores badly in stage 5.</span>
+        </label>
+
+        <label class="field">
+          <span class="field-k">Expires</span>
+          <input class="input" id="np-expiry" type="date">
+          <span class="field-h">Optional. Past it, the PO still matches but scores lower.</span>
+        </label>
+      </form>
+
+      <div class="card-actions">
+        <button class="btn btn-primary" id="np-save" type="submit"
+                form="new-po-form">Add purchase order</button>
+        <button class="btn btn-ghost" id="np-clear" type="button">Clear</button>
+        <span class="save-note" id="np-note"></span>
+      </div>
+
+      <!-- After a successful insert: what now exists, and the one action that
+           proves it works end to end. -->
+      <div class="npo-done" id="np-done" hidden></div>
+    </div>
+
     <div class="budget" id="pos-budget"></div>
 
     <div class="po-board" id="po-board"></div>
@@ -185,6 +306,8 @@
                placeholder="Search PO, vendor or description" aria-label="Search purchase orders">
         <div class="filters" id="po-filters">
           <button class="chip is-active" data-pofilter="ALL">All</button>
+          <button class="chip chip-mine" data-pofilter="MINE">Added by you</button>
+          <button class="chip" data-pofilter="SEED">Demo data</button>
           <button class="chip" data-pofilter="AVAILABLE">Available</button>
           <button class="chip" data-pofilter="NEAR">Nearly spent</button>
           <button class="chip" data-pofilter="FULL">Fully billed</button>
@@ -310,6 +433,11 @@
            vendor who is blocked matches confidently and is still rejected, which is a
            different outcome from one nobody can identify.</p>
       </div>
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" data-add-vendor type="button">Add a vendor</button>
+        <span class="hint">They become available immediately, on this page and in the
+           purchase-order form.</span>
+      </div>
       <div class="table-wrap">
         <table class="grid" id="vendors-table">
           <thead><tr>
@@ -345,11 +473,250 @@
     </div>
 
   </section>
+  <!-- ============================================== HOW IT WORKS ========
+       Written as a document rather than a feature tour: the sections run in
+       the order the system itself does, each one a heading, an explanation and
+       the picture of the mechanism it describes. The index is built from these
+       headings at runtime, so it can never list a section that is not here.
+       ==================================================================== -->
+  <section class="panel" id="panel-how">
+
+    <article class="doc">
+
+      <header class="doc-head">
+        <p class="doc-kicker">Documentation</p>
+        <h1>How this system works</h1>
+        <p class="doc-lead">An invoice arrives as a PDF. Somebody has to decide whether to pay
+           it, and be able to say why. This is what happens in between &mdash; in the order it
+           happens, with a picture of each mechanism.</p>
+        <p class="doc-claim"><b>The model reads. The code decides.</b> Reading an invoice is
+           fuzzy and needs a model. A payment decision has to be explainable, repeatable and
+           defensible to a finance team &mdash; so it is plain code over published numbers, and
+           nothing here asks a model what to do.</p>
+      </header>
+
+      <!-- 1 -->
+      <section class="doc-sec" id="doc-problem">
+        <h2>1. The problem</h2>
+        <p>Before an invoice can be paid, three questions have to be answered, and no single
+           document answers any of them: <b>are we allowed to pay this supplier</b>,
+           <b>did we order this</b>, and <b>have we paid it already?</b> Each one is settled
+           against a different record held somewhere else.</p>
+        <p>Done by hand, that is a person with four browser tabs open, and the cost of getting it
+           wrong is asymmetric &mdash; an invoice paid twice is money gone, while an invoice
+           queried a day late is a phone call. So the job is not to be clever. It is to be right,
+           to be quick about the obvious cases, and to say plainly what it did.</p>
+
+        <div data-uml="decides"></div>
+
+        <h3>Three answers, not two</h3>
+        <div class="how-three">
+          <div class="how-out is-approve">
+            <b>Approve</b>
+            <span>All nine checks passed. Nothing here needs a person.</span>
+          </div>
+          <div class="how-out is-flag">
+            <b>Flag</b>
+            <span>The work is done and something still needs a human eye. The most useful of
+               the three, and the most common.</span>
+          </div>
+          <div class="how-out is-reject">
+            <b>Reject</b>
+            <span>Something no amount of reviewing will fix &mdash; an unapproved supplier, a
+               duplicate, a budget already spent.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section class="doc-sec" id="doc-steps">
+        <h2>2. The seven steps</h2>
+        <p>Every invoice takes the same seven steps, in the same order. You can watch them happen
+           on the <button class="linkish" data-goto="run" type="button">Check an invoice</button>
+           page: each step says what it is doing while it runs, then what it found.</p>
+
+        <div data-uml="steps"></div>
+
+        <p>Splitting the work this way is not decoration. A slow step becomes legible instead of
+           worrying, a failure is attributable to one step rather than to &ldquo;the
+           system&rdquo;, and the record of what happened is written by the thing that happened
+           rather than reconstructed afterwards.</p>
+      </section>
+
+      <!-- 3 -->
+      <section class="doc-sec" id="doc-reading">
+        <h2>3. Reading the page</h2>
+        <p>Step 2 is the only one that uses a model, and it is asked exactly one thing: report
+           what is printed on this page &mdash; the supplier, the dates, the amounts, the purchase
+           order it names &mdash; and for every figure, the words it was read from.</p>
+        <p>Step 3 then goes back to the document and looks those words up in its own text. A
+           figure whose words are found is a figure the system checked; one whose words are not
+           is a figure it only has a claim about. That distinction is the whole of how much it
+           trusts a reading.</p>
+
+        <div data-uml="reading"></div>
+
+        <p>It is also why the five sample invoices use five genuinely different layouts. If every
+           one were the same template, step 2 would be filling in a form rather than reading an
+           invoice, and the demonstration would prove nothing.</p>
+      </section>
+
+      <!-- 4 -->
+      <section class="doc-sec" id="doc-against">
+        <h2>4. What it checks against</h2>
+        <p>An invoice on its own proves nothing. Each of the nine checks holds it against one
+           specific record &mdash; and which record is the whole reason the check can say
+           anything.</p>
+
+        <div data-uml="against"></div>
+
+        <p>The nine are listed in full, with the live number each one uses, on the
+           <button class="linkish" data-goto="admin" type="button">Rules &amp; data</button>
+           page. Those numbers are configuration, not something compiled in: change the purchase
+           order tolerance from 2% to 10%, re-run the same invoice, and the answer changes from
+           flagged to approved. That round trip is asserted by a test, which is the only reason
+           the claim is worth making.</p>
+
+        <h3>Why the worst result wins</h3>
+        <p>Nine checks produce nine results, and the decision is the most serious failure among
+           them. That is a pure function of the results &mdash; same invoice, same reference data,
+           same answer, every time. No score is averaged, nothing is weighted, and nothing is
+           asked to use its judgement.</p>
+      </section>
+
+      <!-- 5 -->
+      <section class="doc-sec" id="doc-stored">
+        <h2>5. What gets written down</h2>
+        <p>Each step writes its own row as it happens, with what it did, how long it took and
+           what it produced. Those rows are not a log <i>of</i> the interface &mdash; they
+           <i>are</i> the interface.</p>
+
+        <div data-uml="stored"></div>
+
+        <p>The ledger is what makes this stateful rather than a per-document checker. An approved
+           invoice books what it spent against its purchase order, so the <i>next</i> invoice
+           against that order is judged against a budget this one already moved. That is the
+           split-invoice case exactly: two invoices each perfectly reasonable alone, where only
+           the running total sees the problem.</p>
+      </section>
+
+      <!-- 6 -->
+      <section class="doc-sec" id="doc-raise">
+        <h2>6. Raising a purchase order yourself</h2>
+        <p>The other half of the loop. A purchase order with no invoice against it demonstrates
+           nothing, so the system can write one and put it through the same seven steps.</p>
+
+        <div data-uml="raise"></div>
+
+        <p>What you raise goes into the same table the pipeline matches against, tagged as yours
+           so it is never confused with the seeded demo data. The invoice it writes is a real PDF
+           with real text on the page, submitted exactly the way a file you drag in would be
+           &mdash; the pipeline is not told where it came from.</p>
+        <p>Each of the three states the verdict it <i>should</i> earn before it runs, and the run
+           view shows that beside what the rules actually decided. A demonstration that announces
+           its expectation first is one you can catch being wrong.</p>
+      </section>
+
+      <!-- 7 -->
+      <section class="doc-sec" id="doc-limits">
+        <h2>7. What it deliberately does not do</h2>
+        <p>Each of these is a real limit on what is being shown, so each is stated rather than
+           left to be discovered.</p>
+        <ul class="doc-list">
+          <li><b>Invoices arrive as a file, not by email.</b> Email intake is a listener in front
+             of step 1. It adds fragility to a live demonstration and no logic, so it is out of
+             scope.</li>
+          <li><b>The vendor and purchase-order lists stand in for a procurement system.</b> The
+             seam where a real one would plug in is real; the data behind it is invented.</li>
+          <li><b>Everything is in rupees</b>, one entity, one tax regime. Multi-currency would
+             change every threshold comparison, so the build says so rather than pretending
+             otherwise.</li>
+          <li><b>Offline mode proves the deterministic half, not reading quality.</b> Its fixtures
+             are the true values of the generated samples, not recorded model output. Only a live
+             run is evidence about extraction.</li>
+          <li><b>The thresholds are plausible mid-market values, not policy.</b> A real
+             deployment would replace every one of them, which is why they are editable rather
+             than compiled in.</li>
+        </ul>
+      </section>
+
+    </article>
+  </section>
+
 </main>
+
+<!-- Adding a vendor, as a dialog over the page rather than a panel inside the
+     form. It is a short, self-contained errand with one required answer, and a
+     panel that pushes the rest of the form down loses the place of whoever was
+     filling it in. -->
+<div class="modal" id="nv-modal" hidden>
+  <div class="modal-scrim" data-nv-close></div>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="nv-title">
+    <div class="modal-head">
+      <h2 id="nv-title">Add a vendor</h2>
+      <button class="modal-x" type="button" data-nv-close aria-label="Close">&times;</button>
+    </div>
+
+    <p class="modal-lead">They join the approved master straight away, with the next free
+       id. An invoice is matched to them by name &mdash; and by tax number, if you give one.</p>
+
+    <form class="modal-form" id="nv-form" autocomplete="off">
+      <label class="field">
+        <span class="field-k">Registered name</span>
+        <input class="input" id="nv-name" type="text" maxlength="120"
+               placeholder="Vectra Engineering Private Limited" required>
+        <span class="field-h">As it is printed on their invoices.</span>
+      </label>
+
+      <details class="modal-more">
+        <summary>Add a tax number or other names they use</summary>
+        <div class="modal-more-body">
+          <label class="field">
+            <span class="field-k">GSTIN</span>
+            <input class="input" id="nv-gstin" type="text" maxlength="15"
+                   placeholder="27AABCV1234A1Z5" spellcheck="false">
+            <span class="field-h">15 characters. The one exact identifier the matcher has.</span>
+          </label>
+          <label class="field">
+            <span class="field-k">Also known as</span>
+            <input class="input" id="nv-aliases" type="text" maxlength="200"
+                   placeholder="Vectra Engineering, Vectra Engg">
+            <span class="field-h">Comma separated &mdash; what an invoice might print instead.</span>
+          </label>
+          <label class="field">
+            <span class="field-k">Payment terms</span>
+            <input class="input" id="nv-terms" type="number" min="0" max="365" step="1" value="30">
+            <span class="field-h">Days.</span>
+          </label>
+        </div>
+      </details>
+    </form>
+
+    <div class="modal-foot">
+      <span class="save-note" id="nv-note"></span>
+      <div class="modal-acts">
+        <button class="btn btn-ghost" type="button" data-nv-close>Cancel</button>
+        <button class="btn btn-primary" id="nv-save" type="button">Add vendor</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="to-top" id="to-top" type="button" aria-label="Back to top">
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <path d="M8 13V3m0 0L3.5 7.5M8 3l4.5 4.5" fill="none" stroke="currentColor"
+          stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span>Top</span>
+</button>
 
 <div class="tooltip" id="tooltip" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
+<!-- uml.js is the SVG vocabulary, how.js the eight figures built from it.
+     Both are loaded before app.js, which calls into them when the page opens. -->
+<script src="/uml.js"></script>
+<script src="/how.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

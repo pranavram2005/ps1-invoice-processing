@@ -132,6 +132,49 @@ A sixth vendor is on the master but **blocked**, so an invoice from them fails
 
 ---
 
+## Raise a purchase order, then check an invoice against it
+
+The dashboard is the front page: what the system has decided so far is the first
+question anyone has. **Check an invoice** is one click from it, and
+**Purchase orders** is where the other half of the loop lives.
+
+A PO raised in the UI is written to the same `pos` table the pipeline matches
+against, tagged `source=user`, and kept visually separate from the twelve seeded
+demo POs in three places — a tag on the row, a filter beside the health filters,
+and a count in the budget panel. The vendor is chosen from the approved master
+rather than typed: a PO naming a supplier the system does not know could never
+pay an invoice, because `R3` would reject the vendor and `R4` would find no PO.
+A supplier who is not on the master yet is added without leaving the page:
+**Add a new vendor** is an option in the vendor picker, and a button on the
+vendor master. It opens a dialog that asks for the name and nothing else,
+because sending someone elsewhere to fix it loses the PO they were typing.
+
+Then the system can write an invoice against it. `backend/invoice_pdf.py` emits
+a genuine single-page PDF with a real text layer — PDF syntax over the base-14
+Helvetica, no new dependency — and submits it through the same `POST /api/runs`
+path as an upload. The pipeline is not told where the bytes came from. Three
+variants, each stating its expected verdict *before* it runs:
+
+| Variant | Bills | Earns | Via |
+|---|---|---|---|
+| matching | ~60% of the PO | APPROVE | nothing fails |
+| over tolerance | ~7.5% over | FLAG | `R5` |
+| past the threshold | ~35% over | REJECT | `R5` |
+
+The run view shows *expected* beside *decided*, and says so when they differ — a
+demo that announces its expectation first is a demo you can catch being wrong.
+Generated invoices are offered only for POs you raised, so the seeded POs keep
+the budgets the prepared scenarios are scored against. The full record,
+including the two traps this hit, is in [PO_ENTRY.md](PO_ENTRY.md).
+
+**How it works** is the sixth tab: the whole system as a seven-section
+document, in the order it runs — the problem, the seven steps, reading the
+page, what it checks against, what gets written down, raising a PO, and the
+limits — with six diagrams drawn as inline SVG, no CDN dependency and no
+diagram library.
+
+---
+
 ## Provenance: checked, not asserted
 
 Every extracted field carries the page it came from and the verbatim text it
@@ -195,8 +238,11 @@ backend/
   pipeline.py     the seven stages
   events.py       in-process SSE broker
   main.py         FastAPI: JSON API + SSE + static frontend
+  invoice_pdf.py  writes an invoice PDF for a PO, in pure Python
   seed.py         vendor/PO masters, sample runs
 frontend/         vanilla JS + hand-written CSS, no build step
+  uml.js          the SVG vocabulary behind the How it works diagrams
+  how.js          the eight UML figures, built from it
 tools/            development tools (see below), not part of the app
 data/invoices/    the nine sample PDFs + ground_truth.json
 ```
@@ -227,6 +273,11 @@ data/invoices/    the nine sample PDFs + ground_truth.json
 | `GET /api/runs/{id}/file` | the stored PDF |
 | `GET /api/rules`, `GET|PATCH /api/config` | the rule set and its live thresholds |
 | `GET /api/vendors`, `GET /api/pos` | the procurement masters |
+| `POST /api/vendors` | add an approved vendor, with the next free id in the `V-2xxx` range |
+| `POST /api/pos` | raise a purchase order (`source=user`); the vendor must be on the approved master |
+| `DELETE /api/pos/{po_number}` | remove a PO you raised, and the generated runs against it |
+| `POST /api/pos/{po_number}/test-invoice` | generate a real invoice PDF for that PO and run it |
+| `GET /api/pos/variants` | the three generated invoices, and the verdict each should earn |
 | `GET /api/stats`, `GET /api/admin/telemetry` | dashboard tiles, token/cost/latency |
 | `POST /api/samples/{name}/run` | run a bundled scenario |
 | `POST /api/admin/reseed` | restore demo data between takes |

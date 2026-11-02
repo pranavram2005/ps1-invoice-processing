@@ -80,6 +80,8 @@ class RuleConfig:
 RULE_CATALOG: list[dict] = [
     {
         "id": "R1",
+        "plain": "Can we even tell what this bill is? Who sent it, when, and for how much.",
+        "source": "the document itself",
         "title": "Required fields present",
         "checks": "Invoice number, invoice date, vendor name and total are all present.",
         "severity": "REJECT if vendor or total is missing, otherwise FLAG",
@@ -87,6 +89,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R2",
+        "plain": "Do the numbers on the page add up to the total the vendor is asking for?",
+        "source": "the document itself",
         "title": "Invoice arithmetic is internally consistent",
         "checks": "Line-item total plus tax equals the stated invoice total.",
         "severity": "FLAG",
@@ -94,6 +98,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R3",
+        "plain": "Are we allowed to pay this supplier at all?",
+        "source": "approved vendors",
         "title": "Vendor is on the approved list",
         "checks": "The extracted vendor name resolves to an approved vendor in the master.",
         "severity": "REJECT",
@@ -101,6 +107,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R4",
+        "plain": "Did we actually order this? Find the purchase order it bills against.",
+        "source": "purchase orders",
         "title": "A purchase order was matched with confidence",
         "checks": "A PO was identified with a match score at or above the floor.",
         "severity": "FLAG",
@@ -108,6 +116,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R5",
+        "plain": "Is the vendor charging more than we agreed to?",
+        "source": "purchase orders",
         "title": "Invoice total is within PO tolerance",
         "checks": "Invoice total does not exceed the matched PO value beyond tolerance.",
         "severity": "FLAG up to the reject threshold, then REJECT",
@@ -115,6 +125,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R6",
+        "plain": "Counting everything billed against that order before, is the budget now overspent?",
+        "source": "purchase orders",
         "title": "Cumulative billing does not over-consume the PO",
         "checks": "Everything already billed against the PO, plus this invoice, stays within the PO value.",
         "severity": "REJECT",
@@ -122,6 +134,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R7",
+        "plain": "Have we already paid this bill once?",
+        "source": "processed history",
         "title": "Not a duplicate submission",
         "checks": "No byte-identical prior submission, and no same-vendor same-amount invoice inside the duplicate window.",
         "severity": "REJECT on an exact duplicate, FLAG on a near duplicate",
@@ -129,6 +143,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R8",
+        "plain": "Is the date believable - not in the future, not so old it should have been paid months ago?",
+        "source": "the document itself",
         "title": "Invoice date is plausible",
         "checks": "Invoice date is not in the future and not older than the staleness limit.",
         "severity": "FLAG",
@@ -136,6 +152,8 @@ RULE_CATALOG: list[dict] = [
     },
     {
         "id": "R9",
+        "plain": "How sure are we that we read the page correctly?",
+        "source": "the document itself",
         "title": "Extraction confidence clears the floor",
         "checks": "Verified field provenance and model confidence combine above the floor; scanned documents are penalised.",
         "severity": "FLAG - mandatory human review",

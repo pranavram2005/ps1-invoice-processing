@@ -378,3 +378,80 @@ read all nine samples correctly. It also 503s under load: one of the nine failed
 that way on the first full live pass and passed on a re-run, which is what the
 retry-with-backoff is for and why a failed extraction fails the run instead of
 falling back to a fixture unless `EXTRACTION_MODE=auto` says to.
+
+---
+
+## 16. A purchase order you raise is demo data too, and says so
+
+The twelve seeded POs are fictional, and so is anything raised in the UI — but
+only one of those two sets is wired into the prepared scenarios, and a figure on
+the purchase-order page is a figure a payment gets decided on. "Is this real
+procurement data or something I typed in a demo?" must never be a question a
+reviewer has to ask, so `pos.source` (`seed`/`user`) is shown in three places: a
+tag on the row, a filter beside the health filters, and a count in the budget
+panel.
+
+**The migration is the load-bearing part.** `CREATE TABLE IF NOT EXISTS` is a
+no-op on a table that already exists, and this repository ships a populated
+`data/invoices.db` that Render uses as-is. A column added only to the schema
+string works locally and 500s in production. `db.MIGRATIONS` is a list of
+`(table, column, ddl)` run on every startup behind a `PRAGMA table_info`
+check — idempotent, and the next column is one line.
+
+**Rejected: free-text vendors.** A PO naming a supplier the system does not know
+can never pay an invoice: `R3` rejects the vendor and `R4` finds no PO. A text
+field would let someone create a purchase order that silently cannot work, and
+then read the resulting rejection as a bug. The vendor is a select over the
+approved master; blocked vendors are listed but disabled, for the same reason
+the provider switch lists a provider with no key.
+
+**Rejected: generated invoices against seeded POs.** It would book consumption
+the prepared scenarios are scored against, and `tools/check_scenarios.py` would
+start failing for a reason nobody would connect to a button in the UI. The offer
+is restricted to POs you raised, and the 400 says why.
+
+**Rejected: reportlab.** One page of output does not justify a rendering library
+in the image. `invoice_pdf.py` writes PDF 1.4 by hand — catalog, pages, one
+content stream, an xref table, base-14 Helvetica — in about 200 lines, and
+`requirements.txt` is unchanged. It has to be a *text-layer* PDF rather than a
+raster, because stage 3 verifies quotes against that layer; a rasterised page
+would have demonstrated the scanned path, which the Kaveri sample already
+covers.
+
+**The generated figures are derived, not typed.** The line items are built first
+and the subtotal, tax and total follow from them, because `R2` adds them up
+again. Typing a round total and back-filling the items produces an invoice that
+does not reconcile — a real scenario in this repo, and not the one this button
+is for.
+
+**The button clears its own history, and only its own.** A second generated
+invoice trips `R7` (same vendor, same amount, same day) and `R6` (the
+consumption the first attempt booked). Both are correct readings of a history
+the button created, so `POST /api/pos/{po}/test-invoice` first deletes runs
+matching `test-invoice-<PO>-%`. Scoped by filename prefix: an uploaded invoice
+is never cleared, and a real duplicate is still caught. Same precedent as
+`delete_runs_by_hash` for the prepared scenarios.
+
+**And each invoice gets its own amount.** Two POs holding the same value, for
+the same vendor, billed the same day at the same ratio produce the same total,
+and `R7`'s tolerance is one rupee — so the second one flags, and clearing per PO
+cannot help, because the collision is *across* POs. Each generated total carries
+a nudge of `max(2, po_value x salt / 100000)`, salted by the PO number and the
+generation second: proportional, so a small PO cannot leave its band; floored,
+so it always clears the tolerance. This was found by the browser check rather
+than by reasoning — the expectation banner read *diverged*, which is what it is
+for.
+
+## 17. The diagrams are generated SVG, not Mermaid
+
+The **How it works** page documents the system in eight UML diagrams. Every
+diagram library worth using is a CDN script, and S12 rules that out at render
+time. So `frontend/uml.js` is a small SVG vocabulary — boxes, class boxes,
+actors, use cases, decisions, notes, combined fragments, and a sequence
+generator — and `frontend/how.js` declares each figure against it.
+
+That is better than hand-placed SVG for a reason beyond saving typing: a
+sequence diagram written as an ordered list of messages stays true to the code
+it documents, where fixed coordinates drift the first time a stage is renamed.
+The geometry is computed, labels wrap and clamp inside the frame, and the
+browser check asserts that no figure's bounding box spills its own viewBox.

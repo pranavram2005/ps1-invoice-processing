@@ -32,9 +32,14 @@ CREATE TABLE IF NOT EXISTS vendors (
     aliases_json       TEXT NOT NULL DEFAULT '[]',
     gstin              TEXT,
     status             TEXT NOT NULL DEFAULT 'approved',   -- approved | blocked
-    payment_terms_days INTEGER NOT NULL DEFAULT 30
+    payment_terms_days INTEGER NOT NULL DEFAULT 30,
+    source             TEXT NOT NULL DEFAULT 'seed',       -- seed | user
+    created_at         TEXT
 );
 
+-- `source` separates the twelve seeded demo POs from ones a user raised in
+-- the UI, so the two can never be confused on screen. Same convention as
+-- `po_consumption.source`.
 CREATE TABLE IF NOT EXISTS pos (
     po_number    TEXT PRIMARY KEY,
     vendor_id    TEXT NOT NULL,
@@ -44,6 +49,8 @@ CREATE TABLE IF NOT EXISTS pos (
     issued_date  TEXT NOT NULL,
     expiry_date  TEXT,
     status       TEXT NOT NULL DEFAULT 'open',
+    source       TEXT NOT NULL DEFAULT 'seed',   -- seed | user
+    created_at   TEXT,
     FOREIGN KEY (vendor_id) REFERENCES vendors(vendor_id)
 );
 CREATE INDEX IF NOT EXISTS idx_pos_vendor ON pos(vendor_id);
@@ -131,10 +138,34 @@ def _now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+# Columns added after the first release. `CREATE TABLE IF NOT EXISTS` is a
+# no-op on a table that already exists, so a new column has to be ALTERed in:
+# the repository ships a populated `data/invoices.db`, and on Render that file
+# is used as-is. Without this the feature would work locally and break there.
+MIGRATIONS: list[tuple[str, str, str]] = [
+    ("pos", "source", "ALTER TABLE pos ADD COLUMN source TEXT NOT NULL DEFAULT 'seed'"),
+    ("pos", "created_at", "ALTER TABLE pos ADD COLUMN created_at TEXT"),
+    ("vendors", "source", "ALTER TABLE vendors ADD COLUMN source TEXT NOT NULL DEFAULT 'seed'"),
+    ("vendors", "created_at", "ALTER TABLE vendors ADD COLUMN created_at TEXT"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> list[str]:
+    applied: list[str] = []
+    for table, column, ddl in MIGRATIONS:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not cols or column in cols:
+            continue
+        conn.execute(ddl)
+        applied.append(f"{table}.{column}")
+    return applied
+
+
 def init_db(path: Path = DB_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
 
 
 @contextmanager
@@ -155,20 +186,62 @@ def connect() -> Iterator[sqlite3.Connection]:
 
 def upsert_vendor(
     vendor_id: str, name: str, aliases: list[str], gstin: str | None,
-    status: str = "approved", payment_terms_days: int = 30,
+    status: str = "approved", payment_terms_days: int = 30, source: str = "seed",
 ) -> None:
     with connect() as conn:
         conn.execute(
             """
-            INSERT INTO vendors (vendor_id, name, aliases_json, gstin, status, payment_terms_days)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO vendors (vendor_id, name, aliases_json, gstin, status,
+                                 payment_terms_days, source, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(vendor_id) DO UPDATE SET
                 name=excluded.name, aliases_json=excluded.aliases_json,
                 gstin=excluded.gstin, status=excluded.status,
-                payment_terms_days=excluded.payment_terms_days
+                payment_terms_days=excluded.payment_terms_days,
+                source=excluded.source
             """,
-            (vendor_id, name, json.dumps(aliases), gstin, status, payment_terms_days),
+            (vendor_id, name, json.dumps(aliases), gstin, status, payment_terms_days,
+             source, _now()),
         )
+
+
+def _next_vendor_id(conn: sqlite3.Connection) -> str:
+    """The next free id in the user's own range, on an open connection.
+
+    The seeded master occupies V-1001 to V-1006, so a vendor added here starts
+    at V-2001: the id itself says which half of the master it came from, and
+    nobody has to invent an identifier to add a supplier.
+
+    Takes the connection rather than opening its own, so the read and the
+    insert that follows it are one transaction. Two callers arriving together
+    would otherwise both read the same maximum, and the second would fail on
+    the primary key.
+    """
+    rows = conn.execute("SELECT vendor_id FROM vendors WHERE vendor_id LIKE 'V-2%'").fetchall()
+    used = [int(r[0][2:]) for r in rows if r[0][2:].isdigit()]
+    return f"V-{max(used, default=2000) + 1}"
+
+
+def insert_vendor(
+    name: str, aliases: list[str], gstin: str | None, *,
+    payment_terms_days: int = 30, vendor_id: str | None = None,
+) -> dict:
+    """Add an approved vendor. Never an upsert, for the same reason
+    `insert_po` is not: silently rewriting a seeded vendor would make the runs
+    already matched against it unexplainable."""
+    with connect() as conn:
+        new_id = vendor_id or _next_vendor_id(conn)
+        conn.execute(
+            """
+            INSERT INTO vendors (vendor_id, name, aliases_json, gstin, status,
+                                 payment_terms_days, source, created_at)
+            VALUES (?, ?, ?, ?, 'approved', ?, 'user', ?)
+            """,
+            (new_id, name, json.dumps(aliases), gstin, payment_terms_days, _now()),
+        )
+    created = next((v for v in list_vendors() if v["vendor_id"] == new_id), None)
+    assert created is not None
+    return created
 
 
 def list_vendors() -> list[dict]:
@@ -182,6 +255,7 @@ def list_vendors() -> list[dict]:
             "gstin": r["gstin"],
             "status": r["status"],
             "payment_terms_days": r["payment_terms_days"],
+            "source": (r["source"] if "source" in r.keys() else "seed") or "seed",
         }
         for r in rows
     ]
@@ -190,23 +264,64 @@ def list_vendors() -> list[dict]:
 def upsert_po(
     po_number: str, vendor_id: str, description: str, po_value: float,
     issued_date: str, expiry_date: str | None, currency: str = "INR",
-    status: str = "open",
+    status: str = "open", source: str = "seed", created_at: str | None = None,
 ) -> None:
     with connect() as conn:
         conn.execute(
             """
             INSERT INTO pos (po_number, vendor_id, description, po_value, currency,
-                             issued_date, expiry_date, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                             issued_date, expiry_date, status, source, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(po_number) DO UPDATE SET
                 vendor_id=excluded.vendor_id, description=excluded.description,
                 po_value=excluded.po_value, currency=excluded.currency,
                 issued_date=excluded.issued_date, expiry_date=excluded.expiry_date,
-                status=excluded.status
+                status=excluded.status, source=excluded.source
             """,
             (po_number, vendor_id, description, po_value, currency,
-             issued_date, expiry_date, status),
+             issued_date, expiry_date, status, source, created_at or _now()),
         )
+
+
+def insert_po(
+    po_number: str, vendor_id: str, description: str, po_value: float,
+    issued_date: str, expiry_date: str | None, currency: str = "INR",
+    status: str = "open", source: str = "user",
+) -> dict:
+    """Create a PO that does not exist yet, or raise.
+
+    Deliberately not `upsert_po`: raising a PO through the UI must never
+    silently rewrite one of the seeded masters, because an invoice already
+    matched against the old value would then be unexplainable. The caller turns
+    the IntegrityError into a 409.
+    """
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO pos (po_number, vendor_id, description, po_value, currency,
+                             issued_date, expiry_date, status, source, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (po_number, vendor_id, description, po_value, currency,
+             issued_date, expiry_date, status, source, _now()),
+        )
+    created = get_po(po_number)
+    assert created is not None
+    return created
+
+
+def delete_po(po_number: str) -> bool:
+    """Remove a PO and whatever was billed against it.
+
+    Only ever called for a user-raised PO (the API enforces that). The
+    consumption rows go too: leaving them would keep a ledger pointing at a PO
+    that no longer exists, and they only exist because of runs against this PO
+    in the first place.
+    """
+    with connect() as conn:
+        conn.execute("DELETE FROM po_consumption WHERE po_number = ?", (po_number,))
+        cur = conn.execute("DELETE FROM pos WHERE po_number = ?", (po_number,))
+        return cur.rowcount > 0
 
 
 def list_pos(vendor_id: str | None = None) -> list[dict]:
@@ -230,6 +345,8 @@ def list_pos(vendor_id: str | None = None) -> list[dict]:
         billed = float(r["already_billed"] or 0.0)
         out.append({
             "po_number": r["po_number"],
+            "source": (r["source"] if "source" in r.keys() else "seed") or "seed",
+            "created_at": r["created_at"] if "created_at" in r.keys() else None,
             "vendor_id": r["vendor_id"],
             "vendor_name": r["vendor_name"],
             "description": r["description"],
@@ -475,6 +592,72 @@ def delete_runs_by_hash(file_sha256: str) -> int:
             conn.execute("DELETE FROM run_stages WHERE run_id = ?", (run_id,))
             conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
         return len(ids)
+
+
+def delete_runs_by_filename_prefix(prefix: str) -> int:
+    """Forget every run of the generated test invoices for one PO.
+
+    Same reasoning as `delete_runs_by_hash`, one level up. A generated test
+    invoice carries a fresh invoice number each time, so it is never a
+    byte-identical duplicate - but it *is* a same-vendor, same-amount invoice
+    on the same day, which is exactly what R7's near-duplicate check is for,
+    and the previous attempt has already booked consumption that R6 would then
+    read. Both are correct readings of a history the button itself created, so
+    the button clears its own history first and the demonstrated verdict is the
+    one the invoice earns on a clean slate.
+
+    Scoped to the `test-invoice-<PO>-` prefix, so an uploaded invoice is never
+    touched and a real duplicate is still caught.
+    """
+    # `_` and `%` are LIKE wildcards, and this prefix carries a PO number - so
+    # this is only a prefix match because `main.PO_NUMBER_RE` rejects both. If
+    # that pattern is ever widened, escape them here.
+    #
+    # Runs still in flight are left alone. Deleting one mid-pipeline does not
+    # stop it: it goes on to stage 7 and books its consumption against a
+    # `run_id` that no longer has a row, and nothing afterwards can find that
+    # ledger entry to undo it. The caller refuses rather than racing.
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT run_id FROM runs WHERE filename LIKE ? AND status != 'running'",
+            (f"{prefix}%",),
+        ).fetchall()
+        ids = [r[0] for r in rows]
+        for run_id in ids:
+            conn.execute("DELETE FROM po_consumption WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM run_stages WHERE run_id = ?", (run_id,))
+            conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+    return len(ids)
+
+
+def running_runs_for_prefix(prefix: str) -> list[str]:
+    """Runs of the generated test invoices for one PO that have not finished.
+
+    Same prefix convention, and the same wildcard note, as
+    `delete_runs_by_filename_prefix`.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT run_id FROM runs WHERE filename LIKE ? AND status = 'running'",
+            (f"{prefix}%",),
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def running_runs_for_po(po_number: str) -> list[str]:
+    """Any unfinished run that has already matched this PO.
+
+    A run that is still going may yet book consumption against the PO, and
+    `po_consumption.po_number` is a foreign key with enforcement on - so
+    deleting the PO underneath it turns the run's own decision stage into an
+    IntegrityError the user sees as a raw database message.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT run_id FROM runs WHERE status = 'running' AND matched_po = ?",
+            (po_number,),
+        ).fetchall()
+    return [r[0] for r in rows]
 
 
 def find_run_by_hash(file_sha256: str, exclude_run_id: str | None = None) -> dict | None:

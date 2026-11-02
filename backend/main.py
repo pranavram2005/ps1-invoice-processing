@@ -10,15 +10,21 @@ import asyncio
 import json
 import hashlib
 import logging
-from datetime import datetime
+import re
+import sqlite3
+from datetime import date, datetime
 from pathlib import Path
+from typing import ClassVar
 
 from fastapi import Body, FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
-from . import config as config_mod, db, explain, pipeline, rules, seed, state
+from . import (
+    config as config_mod, db, explain, invoice_pdf, normalize, pipeline, rules,
+    seed, state,
+)
 from .config import (
     DATA_DIR,
     EXTRACTION_EFFORT,
@@ -186,14 +192,305 @@ def reset_config() -> dict:
 # Procurement masters
 # --------------------------------------------------------------------------- #
 
+PO_NUMBER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/-]{2,23}$")
+
+
+class NewPO(BaseModel):
+    """A purchase order raised through the UI.
+
+    Validated here rather than in the handler so a bad request is a 422 with
+    the offending field named, and so the same rules apply to anything else
+    that posts to this endpoint. Only INR is accepted: every threshold, every
+    rule message and the whole PO ledger are single-currency (see README >
+    Assumptions), and accepting a second currency here would produce a PO that
+    silently compares wrong.
+    """
+
+    po_number: str
+    vendor_id: str
+    description: str = ""
+    po_value: float
+    issued_date: str = ""
+    expiry_date: str | None = None
+    currency: str = "INR"
+    status: str = "open"
+
+    @field_validator("po_number")
+    @classmethod
+    def _po_number(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if not PO_NUMBER_RE.match(cleaned):
+            raise ValueError(
+                "A PO number is 3 to 24 characters of letters, digits, dashes or slashes - "
+                "for example PO-9001."
+            )
+        return cleaned
+
+    @field_validator("vendor_id")
+    @classmethod
+    def _vendor(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if not cleaned:
+            raise ValueError("Choose the vendor this PO is raised on.")
+        return cleaned
+
+    @field_validator("description")
+    @classmethod
+    def _description(cls, value: str) -> str:
+        return value.strip()[:120]
+
+    # A floor, not just a positivity check. The generated test invoices bill a
+    # fixed fraction of the PO value plus a small absolute amount, so that two
+    # POs of the same value do not produce byte-identical invoices that R7
+    # correctly reports as near duplicates (see `invoice_pdf.make_test_invoice`).
+    # That absolute amount is a rounding error against a real purchase order and
+    # dominates a trivial one: below about 80 rupees it pushes the 7.5%-over
+    # variant past the reject threshold, so the invoice advertised as FLAG comes
+    # back REJECT. 1,000 is the floor with comfortable margin, and
+    # `tests/test_po_entry.py` asserts the bands hold from exactly here.
+    MIN_PO_VALUE: ClassVar[float] = 1_000.0
+
+    @field_validator("po_value")
+    @classmethod
+    def _value(cls, value: float) -> float:
+        if not value or value <= 0:
+            raise ValueError("The PO value has to be a positive amount in rupees.")
+        if value < NewPO.MIN_PO_VALUE:
+            raise ValueError(
+                f"A purchase order here starts at INR {NewPO.MIN_PO_VALUE:,.0f}. Below that the "
+                f"generated test invoices cannot land in the bands they advertise."
+            )
+        if value > 1e10:
+            raise ValueError("That is over 1,000 crore; check the figure.")
+        return round(float(value), 2)
+
+    @field_validator("currency")
+    @classmethod
+    def _currency(cls, value: str) -> str:
+        cleaned = (value or "INR").strip().upper()
+        if cleaned != "INR":
+            raise ValueError("This build is INR-only; see README > Assumptions.")
+        return cleaned
+
+    @field_validator("status")
+    @classmethod
+    def _status(cls, value: str) -> str:
+        cleaned = (value or "open").strip().lower()
+        if cleaned not in ("open", "closed"):
+            raise ValueError("A PO is either open or closed.")
+        return cleaned
+
+    @field_validator("issued_date", "expiry_date")
+    @classmethod
+    def _date(cls, value: str | None) -> str | None:
+        if value in (None, ""):
+            return value
+        try:
+            return date.fromisoformat(value.strip()).isoformat()
+        except ValueError as exc:
+            raise ValueError(f"'{value}' is not a date in YYYY-MM-DD form.") from exc
+
+    @model_validator(mode="after")
+    def _window(self) -> "NewPO":
+        # An expiry before the issue date gives the PO an empty validity window,
+        # and stage 5 scores an invoice date against that window - so every
+        # invoice against this PO would score badly for a reason the person who
+        # typed it would never guess.
+        if not self.issued_date:
+            self.issued_date = date.today().isoformat()
+        if self.expiry_date and self.expiry_date < self.issued_date:
+            raise ValueError("The PO cannot expire before it was issued.")
+        return self
+
+
+class TestInvoiceRequest(BaseModel):
+    variant: str = "match"
+
+
+# 15 characters: state code, PAN, entity number, a literal Z, checksum.
+GSTIN_RE = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$")
+
+
+class NewVendor(BaseModel):
+    """A supplier added through the UI, so a PO can be raised against someone
+    who is not in the seeded master.
+
+    Added as `approved`, because an added-and-blocked vendor is a PO nobody
+    could ever pay - the blocked case already exists in the seeded data
+    (Tri-City Electricals) precisely so it can be demonstrated. The id is
+    generated rather than asked for: nobody should have to invent an
+    identifier to add a supplier.
+    """
+
+    name: str
+    aliases: str = ""
+    gstin: str | None = None
+    payment_terms_days: int = 30
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, value: str) -> str:
+        cleaned = " ".join((value or "").split())
+        if len(cleaned) < 3:
+            raise ValueError("Give the vendor its registered name.")
+        # Stage 4 matches on the canonical form - lower-cased, punctuation
+        # stripped, entity suffixes removed. A name that is nothing *but*
+        # entity suffix canonicalises to nothing, so the vendor could never be
+        # resolved, and two such names would be indistinguishable from each
+        # other as well.
+        if not normalize.canonical_vendor_name(cleaned):
+            raise ValueError(
+                f"'{cleaned}' is only a company suffix. Give the trading name as well."
+            )
+        return cleaned[:120]
+
+    @field_validator("gstin")
+    @classmethod
+    def _gstin(cls, value: str | None) -> str | None:
+        cleaned = (value or "").strip().upper()
+        if not cleaned:
+            return None
+        if not GSTIN_RE.match(cleaned):
+            # Stage 4 resolves on GSTIN first and treats an exact match as
+            # settled identity, so a malformed one is worse than none at all.
+            raise ValueError(
+                "A GSTIN is 15 characters, like 27AABCS1234A1Z5. Leave it blank if you "
+                "do not have it - the vendor then resolves by name."
+            )
+        return cleaned
+
+    @field_validator("payment_terms_days")
+    @classmethod
+    def _terms(cls, value: int) -> int:
+        if not 0 <= int(value) <= 365:
+            raise ValueError("Payment terms are between 0 and 365 days.")
+        return int(value)
+
+    def alias_list(self) -> list[str]:
+        """Aliases arrive as one comma-separated field, because that is how a
+        person types them. They matter: stage 4 fuzzy-matches the printed name
+        against the registered name *and* every alias, so "Sharma Steel" on the
+        invoice resolves to "Sharma Steel Works Private Limited"."""
+        return [a for a in (" ".join(part.split()) for part in self.aliases.split(",")) if a][:8]
+
+
 @app.get("/api/vendors")
 def get_vendors() -> list[dict]:
     return db.list_vendors()
 
 
+@app.post("/api/vendors", status_code=201)
+def create_vendor(payload: NewVendor) -> dict:
+    """Add an approved vendor, so a PO can be raised against a supplier who is
+    not in the seeded master.
+
+    Refuses a name or GSTIN that already resolves to an existing vendor. Two
+    vendors the matcher cannot tell apart is the one state this master must
+    never be in: stage 4 would score them within a hair of each other and the
+    winner would be whichever row came back first.
+    """
+    name = payload.name
+    gstin = payload.gstin
+    existing = db.list_vendors()
+
+    if gstin:
+        clash = next((v for v in existing if (v.get("gstin") or "").upper() == gstin), None)
+        if clash:
+            raise HTTPException(
+                409, f"{clash['name']} ({clash['vendor_id']}) already holds GSTIN {gstin}.")
+
+    # Every name this vendor could be recognised by, not just its registered
+    # one: stage 4 scores the printed name against the registered name *and*
+    # every alias, so an alias that collides with an existing vendor produces
+    # two candidates within a hair of each other and the winner is decided by
+    # sort stability. That is the one state this master must never be in.
+    aliases = payload.alias_list()
+    incoming = {
+        normalize.canonical_vendor_name(value): value
+        for value in [name, *aliases]
+        if normalize.canonical_vendor_name(value)
+    }
+    for vendor in existing:
+        for known in [vendor["name"], *vendor.get("aliases", [])]:
+            canonical = normalize.canonical_vendor_name(known)
+            if canonical and canonical in incoming:
+                offending = incoming[canonical]
+                raise HTTPException(
+                    409,
+                    f"'{offending}' already resolves to {vendor['name']} "
+                    f"({vendor['vendor_id']}). Add it as an alias of that vendor rather "
+                    f"than as a second one.",
+                )
+
+    try:
+        created = db.insert_vendor(
+            name=name, aliases=aliases, gstin=gstin,
+            payment_terms_days=payload.payment_terms_days,
+        )
+    except sqlite3.IntegrityError as exc:          # lost a race for the id
+        raise HTTPException(
+            409, "Another vendor was added at the same moment. Try again.") from exc
+    log.info("vendor added in the UI: %s %s", created["vendor_id"], created["name"])
+    return created
+
+
 @app.get("/api/pos")
 def get_pos() -> list[dict]:
     return db.list_pos()
+
+
+@app.get("/api/pos/variants")
+def po_test_variants() -> list[dict]:
+    """The test invoices that can be generated against a PO, and what each one
+    is for. Declared before the `{po_number}` route so the literal path wins."""
+    return [
+        {"id": key, "label": spec["label"], "expect": spec["expect"],
+         "why": spec["why"], "ratio": spec["target_ratio"]}
+        for key, spec in invoice_pdf.VARIANTS.items()
+    ]
+
+
+@app.post("/api/pos", status_code=201)
+def create_po(payload: NewPO) -> dict:
+    """Raise a purchase order from the UI.
+
+    Writes `source='user'`, which is what keeps it distinguishable from the
+    twelve seeded demo POs everywhere it is shown. The vendor is chosen from
+    the approved master rather than typed, because a PO against a vendor the
+    system does not know can never pay an invoice - R3 would reject the vendor
+    and R4 would find no PO - so free text would let someone create a PO that
+    silently cannot work.
+    """
+    vendors = {v["vendor_id"]: v for v in db.list_vendors()}
+    vendor = vendors.get(payload.vendor_id)
+    if vendor is None:
+        raise HTTPException(
+            400,
+            f"'{payload.vendor_id}' is not on the vendor master. A purchase order has to "
+            f"name an approved vendor, or no invoice against it could ever be paid.",
+        )
+    if vendor["status"] != "approved":
+        raise HTTPException(
+            400,
+            f"{vendor['name']} is on the master but {vendor['status']}. An invoice against "
+            f"this PO would be rejected by R3 whatever else it got right.",
+        )
+    if db.get_po(payload.po_number) is not None:
+        raise HTTPException(409, f"{payload.po_number} already exists.")
+
+    try:
+        created = db.insert_po(
+            po_number=payload.po_number, vendor_id=payload.vendor_id,
+            description=payload.description, po_value=payload.po_value,
+            issued_date=payload.issued_date, expiry_date=payload.expiry_date,
+            currency=payload.currency, status=payload.status, source="user",
+        )
+    except sqlite3.IntegrityError as exc:          # lost a race with another client
+        raise HTTPException(409, f"{payload.po_number} already exists.") from exc
+
+    log.info("PO raised in the UI: %s for %s, value %.2f",
+             created["po_number"], created["vendor_id"], created["po_value"])
+    return created
 
 
 @app.get("/api/pos/{po_number}")
@@ -202,6 +499,104 @@ def get_po(po_number: str) -> dict:
     if po is None:
         raise HTTPException(404, f"PO {po_number} not found")
     return {**po, "consumption": db.po_consumption_detail(po_number)}
+
+
+@app.delete("/api/pos/{po_number}")
+def delete_po(po_number: str) -> dict:
+    """Remove a PO raised in the UI, and whatever was billed against it.
+
+    Seeded POs are refused: the prepared scenarios advertise verdicts that
+    depend on them, so deleting one would quietly break a demo elsewhere in the
+    app. Reset the demo data instead.
+    """
+    po = db.get_po(po_number)
+    if po is None:
+        raise HTTPException(404, f"PO {po_number} not found")
+    if po.get("source") != "user":
+        raise HTTPException(
+            400,
+            f"{po_number} is seeded demo data, not yours. The prepared scenarios are scored "
+            f"against it; use 'Reset purchase orders' to restore the demo state instead.",
+        )
+    # Refuse while anything is still running against it. `po_consumption`
+    # holds a foreign key on `pos(po_number)` with enforcement on, so deleting
+    # the PO under an in-flight run turns that run's decision stage into an
+    # IntegrityError the user sees as a raw database message.
+    busy = db.running_runs_for_po(po_number) + db.running_runs_for_prefix(
+        f"test-invoice-{po_number}-")
+    if busy:
+        raise HTTPException(
+            409,
+            f"{po_number} has a run still in progress ({busy[0]}). Wait for it to finish, "
+            f"then delete it.",
+        )
+
+    cleared = db.delete_runs_by_filename_prefix(f"test-invoice-{po_number}-")
+    db.delete_po(po_number)
+    log.info("PO %s deleted, %d generated test run(s) cleared", po_number, cleared)
+    return {"deleted": po_number, "test_runs_cleared": cleared}
+
+
+@app.post("/api/pos/{po_number}/test-invoice")
+async def run_test_invoice(po_number: str, payload: TestInvoiceRequest) -> dict:
+    """Generate an invoice for this PO and put it through the real pipeline.
+
+    This is the other half of raising a PO: a PO with no invoice against it
+    demonstrates nothing. The PDF is written here (`invoice_pdf.py`), with a
+    real text layer, and then goes through exactly the same code path as an
+    upload - `pipeline.start` does not know and cannot tell where the bytes
+    came from.
+
+    Restricted to user-raised POs on purpose. Generating one against a seeded
+    PO would book consumption the prepared scenarios are scored against, and
+    `tools/check_scenarios.py` would start failing for a reason nobody would
+    connect to a button in the UI.
+    """
+    po = db.get_po(po_number)
+    if po is None:
+        raise HTTPException(404, f"PO {po_number} not found")
+    if po.get("source") != "user":
+        raise HTTPException(
+            400,
+            f"{po_number} is one of the seeded demo POs. Generated invoices are only offered "
+            f"for POs you raised, so the prepared scenarios keep the budgets they are scored "
+            f"against. Raise a PO of your own and try it there.",
+        )
+    vendor = next((v for v in db.list_vendors() if v["vendor_id"] == po["vendor_id"]), None)
+    if vendor is None:
+        raise HTTPException(409, f"{po_number} names vendor {po['vendor_id']}, who is not on the master.")
+
+    try:
+        generated = invoice_pdf.make_test_invoice(
+            po=po, vendor=vendor, variant=payload.variant,
+            sequence=int(datetime.now().strftime("%H%M%S")),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    # One at a time per PO. The three variant buttons share one filename
+    # prefix, so starting a second while the first is still in the pipeline
+    # would clear the first's rows out from under it - and the first would go
+    # on to book consumption against a run that no longer exists, leaving a
+    # charge against this PO that nothing can find to undo.
+    prefix = f"test-invoice-{po_number}-"
+    in_flight = db.running_runs_for_prefix(prefix)
+    if in_flight:
+        raise HTTPException(
+            409,
+            f"A generated invoice for {po_number} is still being processed "
+            f"({in_flight[0]}). Wait for it to finish, then try again.",
+        )
+
+    # Then clear this button's own finished history - see
+    # `db.delete_runs_by_filename_prefix` for why that is the honest thing to
+    # do rather than a way of hiding a duplicate.
+    cleared = db.delete_runs_by_filename_prefix(prefix)
+
+    run_id = pipeline.new_run_id()
+    _schedule(run_id, generated["filename"], generated["pdf"], replay=False)
+    meta = {k: v for k, v in generated.items() if k != "pdf"}
+    return {"run_id": run_id, "cleared_prior_runs": cleared, "po_number": po_number, **meta}
 
 
 # --------------------------------------------------------------------------- #

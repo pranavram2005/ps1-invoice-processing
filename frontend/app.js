@@ -77,7 +77,15 @@
       let detail = `${response.status} ${response.statusText}`;
       try {
         const payload = await response.json();
-        if (payload && payload.detail) detail = payload.detail;
+        if (payload && Array.isArray(payload.detail)) {
+          // FastAPI validation errors: one object per field. Pydantic prefixes
+          // its own "Value error, ", which is noise in a UI.
+          detail = payload.detail
+            .map((item) => String(item.msg || '').replace(/^Value error, /, ''))
+            .filter(Boolean).join(' ') || detail;
+        } else if (payload && payload.detail) {
+          detail = payload.detail;
+        }
       } catch (_) { /* keep the status line */ }
       throw new Error(detail);
     }
@@ -132,6 +140,9 @@
     posFilter: 'ALL',
     posQuery: '',
     posSort: { key: 'pct', dir: 'desc' },
+    vendors: [],
+    variants: [],
+    intent: null,        // what a generated invoice was built to demonstrate
   };
 
   // -------------------------------------------------------------------- tabs
@@ -193,6 +204,64 @@
     }, { passive: true });
   }
 
+  /** The floating index beside the documentation.
+   *
+   *  Built from the `h2` of each `.doc-sec` actually in the page, so it cannot
+   *  list a section that is not there or miss one that is. It floats in the
+   *  left margin rather than sitting above the text: the page is seven
+   *  sections of prose and pictures, and a reader scrolling through them wants
+   *  to know where they are without a control taking a slice off the top of
+   *  every screen. Below the width where a margin exists it becomes a strip
+   *  across the top instead, because being hidden is not the same as being
+   *  unnecessary.
+   */
+  function buildDocIndex() {
+    const panel = $('#panel-how');
+    if (!panel || $('.doc-index', panel)) return;
+    const sections = $$('.doc-sec', panel).filter((section) => $('h2', section));
+    if (sections.length < 3) return;
+
+    const nav = document.createElement('nav');
+    nav.className = 'doc-index';
+    nav.setAttribute('aria-label', 'Sections of this document');
+    nav.innerHTML = '<p class="doc-index-k">On this page</p>'
+      + sections.map((section, i) => {
+        if (!section.id) section.id = `doc-sec-${i}`;
+        // The numbering is already in the heading; the index shows the words.
+        const title = $('h2', section).textContent.replace(/^\d+\.\s*/, '');
+        return `<button class="doc-index-link" type="button" data-to="${esc(section.id)}">
+                  <span class="doc-index-n">${i + 1}</span>${esc(title)}
+                </button>`;
+      }).join('');
+
+    panel.insertBefore(nav, panel.firstChild);
+
+    const links = $$('.doc-index-link', nav);
+    links.forEach((link) => link.addEventListener('click', () => {
+      const target = document.getElementById(link.dataset.to);
+      if (!target) return;
+      window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 92,
+                        behavior: 'smooth' });
+    }));
+
+    const spy = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const i = sections.indexOf(entry.target);
+        links.forEach((link, j) => link.classList.toggle('is-here', j === i));
+      });
+    }, { rootMargin: '-90px 0px -62% 0px' });
+    sections.forEach((section) => spy.observe(section));
+
+    // The last section can never reach the observer's band - the page bottoms
+    // out first - so scrolling to the end would leave the previous link marked.
+    window.addEventListener('scroll', () => {
+      if (!panel.classList.contains('is-active')) return;
+      const atEnd = window.innerHeight + window.scrollY >= document.body.scrollHeight - 4;
+      if (atEnd) links.forEach((link, j) => link.classList.toggle('is-here', j === links.length - 1));
+    }, { passive: true });
+  }
+
   function showTab(name) {
     $$('.nav-link').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.tab === name));
     $$('.panel').forEach((panel) => panel.classList.toggle('is-active', panel.id === `panel-${name}`));
@@ -200,9 +269,15 @@
     // last one happened to be scrolled to.
     window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     if (name === 'dashboard') loadDashboard();
-    if (name === 'pos') loadPos();
+    if (name === 'pos') { loadPos(); loadPoForm(); }
     if (name === 'admin') loadAdmin();
     if (name === 'layouts') loadLayouts();
+    if (name === 'how') {
+      // Built on first open rather than at load - most visits never come here.
+      // Both calls are idempotent.
+      if (window.renderHowItWorks) window.renderHowItWorks();
+      buildDocIndex();
+    }
   }
 
   $$('.nav-link').forEach((tab) => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
@@ -325,35 +400,65 @@
     // reviewer is told to look for - the happy path, then an edge case - was
     // the one thing the UI would not tell them. The grouping is the answer to
     // "which of these is the normal one?".
+    //
+    // Cards rather than rows: each scenario has to carry a title, the reason it
+    // is worth running, the verdict it should earn and its own PDF download,
+    // and a card gives those four things room without a reviewer reading
+    // across a line. The happy-path group is tinted so the normal case is
+    // identifiable before anything is read.
     const GROUPS = [
-      { key: 'happy', title: 'Happy path', match: (s) => s.expected === 'APPROVE' },
-      { key: 'edge', title: 'Edge cases', match: (s) => s.expected !== 'APPROVE' },
+      {
+        key: 'happy',
+        title: 'Happy path',
+        blurb: 'Nothing is wrong with these. They should sail through, and they do.',
+        match: (s) => s.expected === 'APPROVE',
+      },
+      {
+        key: 'edge',
+        title: 'Edge cases',
+        blurb: 'Each one breaks a different rule. This is where the system earns its keep - '
+             + 'the interesting question is not whether it reads a clean invoice, but what it '
+             + 'does with a bad one.',
+        match: (s) => s.expected !== 'APPROVE',
+      },
     ];
 
     node.innerHTML = GROUPS.map((group) => {
       const items = state.samples.filter(group.match).sort((a, b) => a.order - b.order);
       if (!items.length) return '';
-      // One row per scenario, divided by a hairline. Cards gave fourteen
-      // equal-weight boxes and turned the page into a wall; a list is read
-      // top to bottom, which is how someone picks one.
       return `
-        <section class="sgroup">
-          <h3 class="sgroup-head">${esc(group.title)}<span>${items.length}</span></h3>
-          <ul class="slist">${items.map((s) => `
-            <li class="srow" data-file="${esc(s.file)}" tabindex="0" role="button"
-                aria-label="Run ${esc(s.title)}, expects ${esc(s.expected)}">
-              <span class="srow-title">${esc(s.title)}</span>
-              <span class="srow-why">${esc(s.why)}</span>
-              ${decisionBadge(s.expected)}
-            </li>`).join('')}</ul>
+        <section class="sgroup sgroup-${group.key}">
+          <div class="sgroup-head">
+            <h3>${esc(group.title)} <span class="sgroup-n">${items.length}</span></h3>
+            <p>${esc(group.blurb)}</p>
+          </div>
+          <div class="sgrid">${items.map((s) => `
+            <article class="scard" data-file="${esc(s.file)}" tabindex="0" role="button"
+                     aria-label="Run ${esc(s.title)}, expects ${esc(s.expected)}">
+              <div class="scard-top">
+                <span class="scard-title">${esc(s.title)}</span>
+                ${decisionBadge(s.expected)}
+              </div>
+              <p class="scard-why">${esc(s.why)}</p>
+              <div class="scard-foot">
+                <span class="scard-run">Run this &rarr;</span>
+                <a class="dl" href="/api/samples/${encodeURIComponent(s.file)}/file?download=1"
+                   download onclick="event.stopPropagation()">PDF</a>
+              </div>
+            </article>`).join('')}</div>
         </section>`;
     }).join('');
 
-    $$('.srow', node).forEach((row) => {
-      const go = () => runSample(row.dataset.file);
-      row.addEventListener('click', go);
-      row.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    $$('.scard', node).forEach((card) => {
+      const go = (event) => {
+        // The download link lives inside the card; clicking it must not also
+        // start a run.
+        if (event.target.closest('.dl')) return;
+        runSample(card.dataset.file);
+      };
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); go(event); }
       });
     });
   }
@@ -398,18 +503,20 @@
   }
 
   /** Point the run view at a run id and stream it. */
-  function attachRun(runId, filename) {
+  function attachRun(runId, filename, intent = null) {
     if (state.source) { state.source.close(); state.source = null; }
     state.openStages.clear();
     state.run = { run_id: runId, filename, status: 'running' };
     state.stages = [];
+    state.intent = intent;
     showResultView(true);
     $('#run-filename').textContent = filename || runId;
     $('#run-meta').innerHTML = '';
     $('#decision').hidden = true;
     $('#run-panes').hidden = true;
-    $('#run-detail').hidden = true;
+    $('#run-detail').hidden = false;
     $('#ai-summary').hidden = true;
+    renderIntent();
     updateWorking();
     renderTimeline();
     showTab('run');
@@ -456,6 +563,7 @@
       state.run = run;
       state.stages = run.stages || state.stages;
       renderTimeline();
+      renderIntent();
       renderDecision(run);
       renderRunMeta(run);
       loadHealth();
@@ -467,6 +575,11 @@
   }
 
   async function loadRun(runId) {
+    // Clearing the field is not enough - the banner is already on the page,
+    // and without a re-render it would attribute one PO's declared expectation
+    // and verdict to whatever run is opened next.
+    state.intent = null;
+    renderIntent();
     try {
       const run = await api(`/api/runs/${encodeURIComponent(runId)}`);
       if (run.status === 'running') { attachRun(runId, run.filename); return; }
@@ -518,46 +631,107 @@
 
   const STATUS_MARK = { done: '✓', failed: '✕', skipped: '–', pending: '', running: '' };
 
+  /** The seven steps, told in order, as they happen.
+   *
+   *  This is the first thing on the run view rather than a collapsed section at
+   *  the bottom, because watching the work is the point: a reviewer who cannot
+   *  see what a system did has to take its verdict on trust.
+   *
+   *  Each step carries three things, in increasing detail and decreasing
+   *  prominence. What the step is for, in one plain sentence - written here,
+   *  not by the backend, and phrased in the future, present or past depending
+   *  on where the run has got to. What it actually found on *this* invoice -
+   *  the stage's own `summary`, straight from the audit row. And, one click
+   *  away, everything it produced.
+   */
   function renderTimeline() {
     const container = $('#timeline');
+    if (!container) return;
     const stages = state.stages.length
       ? state.stages
       : Array.from({ length: 7 }, (_, i) => ({ seq: i + 1, label: '…', status: 'pending', payload: {} }));
 
-    container.innerHTML = stages.map((stage) => {
+    const done = stages.filter((x) => x.status === 'done' || x.status === 'skipped').length;
+    container.style.setProperty('--story-done', String(done));
+    container.style.setProperty('--story-total', String(stages.length));
+
+    container.innerHTML = stages.map((stage, i) => {
+      const phase = PHASES[stage.seq - 1]
+        || { name: stage.label, will: '', doing: '', done: '' };
       const open = state.openStages.has(stage.seq);
       const interactive = stage.status !== 'pending';
-      const mark = stage.status === 'running'
-        ? '<span class="spinner"></span>'
-        : (STATUS_MARK[stage.status] || stage.seq);
       const body = interactive ? renderStageBody(stage) : '';
+
+      const mark = stage.status === 'running' ? '<span class="spinner"></span>'
+        : stage.status === 'done' ? '✓'
+        : stage.status === 'failed' ? '✕'
+        : stage.status === 'skipped' ? '–'
+        : stage.seq;
+
+      // The same sentence in three tenses, which is what makes a list of steps
+      // read as a story rather than as a status table.
+      const say = stage.status === 'pending' ? phase.will
+        : stage.status === 'running' ? phase.doing
+        : phase.done;
+
+      const found = stage.error ? esc(stage.error) : esc(stage.summary || '');
+
       return `
-        <div class="stage is-${esc(stage.status)}${open ? ' is-open' : ''}" data-seq="${stage.seq}">
-          <button class="stage-row" type="button" ${interactive ? '' : 'disabled'}>
-            <span class="stage-mark">${mark}</span>
-            <span class="stage-main">
-              <span class="stage-label">${stage.seq}. ${esc(stage.label)}</span>
-              <span class="stage-summary">${stage.error ? esc(stage.error) : esc(stage.summary || '')}</span>
-            </span>
-            <span class="stage-right">
-              <span class="stage-time">${stage.duration_ms != null ? duration(stage.duration_ms) : ''}</span>
-              ${interactive && body ? '<span class="caret">▶</span>' : ''}
-            </span>
-          </button>
-          ${body ? `<div class="stage-body">${body}</div>` : ''}
-        </div>`;
+        <li class="pstep is-${esc(stage.status)}${open ? ' is-open' : ''}" data-seq="${stage.seq}">
+          <div class="pstep-rail"><span class="pstep-mark">${mark}</span></div>
+          <div class="pstep-main">
+            <div class="pstep-head">
+              <span class="pstep-n">Step ${stage.seq}</span>
+              <h4 class="pstep-name">${esc(phase.name)}</h4>
+              ${stage.status === 'running' ? '<span class="pstep-live">happening now</span>' : ''}
+              ${stage.status === 'skipped' ? '<span class="pstep-skip">not needed</span>' : ''}
+              ${stage.status === 'failed' ? '<span class="pstep-fail">failed</span>' : ''}
+              <span class="pstep-time">${stage.duration_ms != null ? duration(stage.duration_ms) : ''}</span>
+            </div>
+            <p class="pstep-say">${esc(say)}</p>
+            ${found ? `<p class="pstep-found ${stage.error ? 'is-err' : ''}">${found}</p>` : ''}
+            ${body ? `<button class="pstep-more" type="button">
+                        <span class="caret">▸</span>
+                        <span class="pstep-more-t">${open ? 'Hide' : 'Show'} what this step produced</span>
+                      </button>
+                      <div class="stage-body">${body}</div>` : ''}
+          </div>
+        </li>`;
     }).join('');
 
-    $$('.stage', container).forEach((node) => {
+    $$('.pstep', container).forEach((node) => {
       const seq = Number(node.dataset.seq);
-      const row = $('.stage-row', node);
-      if (!row || row.disabled) return;
-      row.addEventListener('click', () => {
-        if (state.openStages.has(seq)) state.openStages.delete(seq);
-        else state.openStages.add(seq);
-        node.classList.toggle('is-open');
+      const toggle = $('.pstep-more', node);
+      if (!toggle) return;
+      toggle.addEventListener('click', () => {
+        const nowOpen = !state.openStages.has(seq);
+        if (nowOpen) state.openStages.add(seq); else state.openStages.delete(seq);
+        node.classList.toggle('is-open', nowOpen);
+        $('.pstep-more-t', node).textContent =
+          `${nowOpen ? 'Hide' : 'Show'} what this step produced`;
       });
     });
+
+    // The heading is in the same tense as the steps under it.
+    const title = $('#story-title');
+    if (title) {
+      const live = stages.some((x) => x.status === 'running' || x.status === 'pending');
+      title.textContent = live ? 'How this is being processed' : 'How this was processed';
+    }
+
+    // Folded, the panel still has to say what is behind it - otherwise it is a
+    // heading with no indication that there are seven steps under it, or how
+    // they went.
+    const summary = $('#story-summary');
+    if (summary) {
+      const failed = stages.filter((x) => x.status === 'failed').length;
+      const settled = stages.filter((x) => x.status === 'done' || x.status === 'skipped').length;
+      summary.textContent = failed
+        ? `${stages.length} steps · ${failed} failed`
+        : settled >= stages.length
+          ? `All ${stages.length} steps, in order. Open to read them.`
+          : `Step ${Math.min(settled + 1, stages.length)} of ${stages.length} — still running.`;
+    }
 
     bindTooltips(container);
     const expandBtn = $('#expand-btn');
@@ -889,6 +1063,7 @@
   function showResultView(on) {
     $('#run-intake').hidden = !!on;
     $('#run-result').hidden = !on;
+    if (!on) { state.intent = null; renderIntent(); }
   }
 
   // Short names for the tracker, plus what each stage is actually doing. The
@@ -898,36 +1073,43 @@
   const PHASES = [
     {
       name: 'Read file',
+      will: 'Will open the PDF, fingerprint it, and check whether it has real text or is a scan.',
       doing: 'Opening the PDF, fingerprinting it, and checking whether it has real text or is a scan.',
       done: 'Opened the file and checked whether it has a text layer.',
     },
     {
       name: 'Extract',
+      will: 'Will send the page to a model to pull out the vendor, dates, amounts and PO reference.',
       doing: 'A model is reading the page and pulling out the vendor, dates, amounts and PO reference.',
       done: 'Read the fields off the page.',
     },
     {
       name: 'Verify',
+      will: 'Will check each extracted figure against the text actually printed in the document.',
       doing: 'Checking each extracted figure against the text actually printed in the document.',
       done: 'Checked every figure against the document itself.',
     },
     {
       name: 'Vendor',
+      will: 'Will look the supplier up on the approved vendor list.',
       doing: 'Looking the supplier up on the approved vendor list.',
       done: 'Looked the supplier up on the approved list.',
     },
     {
       name: 'Match PO',
+      will: 'Will score every plausible purchase order to find which one this bills against.',
       doing: 'Scoring every plausible purchase order to find which one this bills against.',
       done: 'Found the purchase order this bills against.',
     },
     {
       name: 'Check rules',
+      will: 'Will run all nine checks - totals, tolerances, duplicates, dates, confidence.',
       doing: 'Running all nine checks - totals, tolerances, duplicates, dates, confidence.',
       done: 'Ran all nine checks.',
     },
     {
       name: 'Decide',
+      will: 'Will combine the results: the most serious failure sets the outcome.',
       doing: 'Combining the results: the most serious failure sets the outcome.',
       done: 'Reached a decision.',
     },
@@ -1676,21 +1858,124 @@
     }
   }
 
+  /** The nine rules, as cards.
+   *
+   *  A reviewer's first question about a rule engine is not "what are the
+   *  rules" but "what does this one actually stop?". So each card leads with
+   *  that question in the words someone outside the team would use, then the
+   *  precise check, then what happens when it fails and the live numbers it
+   *  uses. Every value here is served from `/api/rules` - the same definitions
+   *  the engine applies - so the page cannot describe a rule the code does not
+   *  have.
+   */
+  const SEVERITY_SHAPE = [
+    { test: /REJECT.*FLAG|FLAG.*REJECT/i, cls: 'is-both-chip', chip: 'FLAG, then REJECT' },
+    { test: /REJECT/i, cls: 'is-reject-chip', chip: 'REJECT' },
+    { test: /FLAG/i, cls: 'is-flag-chip', chip: 'FLAG' },
+  ];
+
+  const THRESHOLD_WORDS = {
+    po_tolerance_pct: 'how much over the PO is still acceptable, in percent',
+    po_over_tolerance_reject_pct: 'how far over the PO turns into a rejection',
+    duplicate_window_days: 'how many days either side count as a near duplicate',
+    confidence_floor: 'the least certainty a reading may have',
+    arithmetic_tolerance: 'rounding slack, in rupees',
+    stale_invoice_days: 'how old an invoice may be',
+    po_match_min_score: 'the score a PO match must reach',
+    vendor_match_min_score: 'the score a vendor match must reach',
+  };
+
   function renderRules(payload) {
-    $('#rules-list').innerHTML = payload.rules.map((rule) => `
-      <div class="rule-def">
-        <div class="rule-id">${esc(rule.id)}</div>
-        <div>
-          <div class="rd-title">${esc(rule.title)}</div>
-          <div class="rd-checks">${esc(rule.checks)}</div>
-          <div class="rd-meta">
-            <span class="badge">${esc(rule.severity)}</span>
-            ${Object.entries(rule.active_thresholds || {}).map(([key, value]) =>
-              `<span class="badge badge-accent"><code>${esc(key)}</code> = ${esc(value)}</span>`).join('')}
-          </div>
+    const rules = payload.rules || [];
+
+    // Grouped by what each rule is compared against, which is the same shape
+    // the diagram on How it works uses. Nine cards in one grid is a list to be
+    // read through; four groups is a structure to be understood, and the
+    // grouping is the answer to the question a reviewer actually has - "what
+    // does this system know that lets it say that?".
+    const GROUPS = [
+      { source: 'approved vendors', title: 'Against the approved vendor list',
+        blurb: 'Who we are allowed to pay at all.', tab: 'admin' },
+      { source: 'purchase orders', title: 'Against the purchase orders',
+        blurb: 'What was ordered, and how much of each budget is left.', tab: 'pos' },
+      { source: 'processed history', title: 'Against every invoice seen before',
+        blurb: 'By file, and by vendor, amount and date.', tab: 'dashboard' },
+      { source: 'the document itself', title: 'Against the document itself',
+        blurb: 'Its own printed text, re-read to check what was taken off it.', tab: null },
+    ];
+
+    const counts = { REJECT: 0, FLAG: 0 };
+    rules.forEach((rule) => {
+      const shape = severityShape(rule.severity);
+      if (shape.chip.includes('REJECT')) counts.REJECT += 1; else counts.FLAG += 1;
+    });
+
+    const legend = `
+      <div class="rules-legend">
+        <div class="rl-item">
+          <span class="rcard-sev is-reject-chip">REJECT</span>
+          <span>stops the payment outright &mdash; nothing a reviewer can do makes it payable</span>
         </div>
-      </div>`).join('')
+        <div class="rl-item">
+          <span class="rcard-sev is-flag-chip">FLAG</span>
+          <span>holds it for a person, with the finding and the figures already on screen</span>
+        </div>
+        <div class="rl-item rl-rule">
+          <span>Worst result wins. ${rules.length} checks, every invoice, in order.</span>
+        </div>
+      </div>`;
+
+    const groups = GROUPS.map((group) => {
+      const items = rules.filter((rule) => rule.source === group.source);
+      if (!items.length) return '';
+      return `
+        <section class="rgroup">
+          <header class="rgroup-head">
+            <h3>${esc(group.title)}</h3>
+            <p>${esc(group.blurb)}</p>
+            ${group.tab
+              ? `<button class="linkish" type="button" data-goto="${esc(group.tab)}">See the data</button>`
+              : ''}
+            <span class="rgroup-n">${items.length} check${items.length === 1 ? '' : 's'}</span>
+          </header>
+          <div class="rules-grid">${items.map(ruleCard).join('')}</div>
+        </section>`;
+    }).join('');
+
+    $('#rules-list').innerHTML = legend + groups
       + `<div class="note note-info">${esc(payload.decision_logic)}</div>`;
+  }
+
+  function severityShape(severity) {
+    return SEVERITY_SHAPE.find((entry) => entry.test.test(severity || '')) || SEVERITY_SHAPE[2];
+  }
+
+  /** One rule. The question it answers leads, because that is what a reviewer
+   *  arrives wanting; the formal name, the precise check and the live number
+   *  follow in decreasing order of how often they are needed. */
+  function ruleCard(rule) {
+    const shape = severityShape(rule.severity);
+    const thresholds = Object.entries(rule.active_thresholds || {});
+    return `
+      <article class="rcard">
+        <header class="rcard-top">
+          <span class="rcard-id">${esc(rule.id)}</span>
+          <span class="rcard-sev ${shape.cls}">${esc(shape.chip)}</span>
+        </header>
+
+        <h4 class="rcard-q">${esc(rule.plain || rule.title)}</h4>
+        ${rule.plain ? `<p class="rcard-title">${esc(rule.title)}</p>` : ''}
+
+        <p class="rcard-checks"><span>Checks</span>${esc(rule.checks)}</p>
+
+        ${thresholds.length ? `<ul class="rcard-th">${thresholds.map(([key, value]) => `
+          <li>
+            <code>${esc(key)}</code>
+            <b>${esc(value)}</b>
+            <span>${esc(THRESHOLD_WORDS[key] || '')}</span>
+          </li>`).join('')}</ul>`
+          : '<p class="rcard-th-none">No number to tune &mdash; it either holds or it does not.</p>'}
+      </article>`;
   }
 
   const CONFIG_HINTS = {
@@ -1781,6 +2066,7 @@
     const health = pct >= 100 ? 'over' : pct >= 80 ? 'near' : billed === 0 ? 'unused' : 'ok';
     return {
       ...po, value, billed, remaining, pct, daysLeft, health,
+      mine: po.source === 'user',
       expired: daysLeft != null && daysLeft < 0,
     };
   }
@@ -1794,6 +2080,8 @@
 
   const PO_FILTERS = {
     ALL:       () => true,
+    MINE:      (po) => po.source === 'user',
+    SEED:      (po) => po.source !== 'user',
     AVAILABLE: (po) => po.health === 'ok' || po.health === 'unused',
     NEAR:      (po) => po.health === 'near',
     FULL:      (po) => po.health === 'over',
@@ -1806,7 +2094,7 @@
       state.pos = (await api('/api/pos')).map(decoratePo);
     } catch (err) {
       body.innerHTML = '';
-      $('#pos-tiles').innerHTML = '';
+      $('#pos-budget').innerHTML = '';
       $('#po-board').innerHTML = '';
       const empty = $('#pos-empty');
       empty.hidden = false;
@@ -1848,7 +2136,9 @@
       over: acc.over + (po.health === 'over' ? 1 : 0),
       near: acc.near + (po.health === 'near' ? 1 : 0),
       unused: acc.unused + (po.health === 'unused' ? 1 : 0),
-    }), { value: 0, billed: 0, over: 0, near: 0, unused: 0 });
+      mine: acc.mine + (po.mine ? 1 : 0),
+      mineValue: acc.mineValue + (po.mine ? po.value : 0),
+    }), { value: 0, billed: 0, over: 0, near: 0, unused: 0, mine: 0, mineValue: 0 });
     const available = t.value - t.billed;
     const pct = t.value ? (t.billed / t.value) * 100 : 0;
     const healthy = pos.length - t.over - t.near;
@@ -1883,7 +2173,9 @@
 
       <div class="budget-figs">
         ${fig('Committed', compactInr(t.value), money(t.value, 'INR'),
-              `${pos.length} purchase orders`)}
+              t.mine
+                ? `${pos.length} purchase orders · ${t.mine} yours`
+                : `${pos.length} purchase orders`)}
         ${fig('Billed to date', compactInr(t.billed), money(t.billed, 'INR'),
               `${pct.toFixed(1)}% of committed`)}
         ${fig('Still available', compactInr(available), money(available, 'INR'),
@@ -1891,6 +2183,9 @@
       </div>
 
       <div class="budget-flags">
+        ${t.mine ? `<span class="bflag is-mine" data-pofilter-go="MINE" role="button"
+            tabindex="0" title="Show only the purchase orders added here"><b>${t.mine}</b>
+            added by you · ${compactInr(t.mineValue)}</span>` : ''}
         ${t.over ? `<span class="bflag is-over"><b>${t.over}</b> over-consumed</span>` : ''}
         ${t.near ? `<span class="bflag is-near"><b>${t.near}</b> nearly spent</span>` : ''}
         <span class="bflag is-ok"><b>${healthy}</b> with headroom</span>
@@ -1971,6 +2266,11 @@
       th.dataset.dir = th.dataset.posort === key ? dir : '';
     });
 
+    // The expanded rows are pinned to the visible width of the scroll area
+    // rather than to the table's own width - see `.po-detail-body`. Measured
+    // here and on resize, because only the browser knows it.
+    sizePoDetails();
+
     $('#pos-empty').hidden = rows.length > 0;
     $('#pos-table tbody').innerHTML = rows.map((po) => {
       const h = PO_HEALTH[po.health];
@@ -1978,9 +2278,11 @@
         : po.daysLeft < 0 ? `<span class="po-exp is-bad">${Math.abs(po.daysLeft)}d ago</span>`
         : po.daysLeft <= 30 ? `<span class="po-exp is-soon">in ${po.daysLeft}d</span>`
         : `<span class="po-exp">in ${po.daysLeft}d</span>`;
-      return `<tr class="po-main ${h.cls}" data-po="${esc(po.po_number)}" tabindex="0"
+      return `<tr class="po-main ${h.cls} ${po.mine ? 'is-mine' : ''}"
+                  data-po="${esc(po.po_number)}" tabindex="0"
                   role="button" aria-expanded="false">
-        <td><code class="po-code">${esc(po.po_number)}</code></td>
+        <td><code class="po-code">${esc(po.po_number)}</code>
+            ${po.mine ? '<span class="po-mine">added by you</span>' : ''}</td>
         <td class="po-vendor-cell">${esc(po.vendor_name || po.vendor_id)}
             <div class="po-desc">${esc(po.description || '')}</div>
             <div class="po-vid"><code>${esc(po.vendor_id)}</code></div></td>
@@ -2009,6 +2311,31 @@
     wirePoRows();
   }
 
+  /** Give the expanded rows the width of the part of the table you can see.
+   *
+   *  The panel starts a little inside the scroll container's left edge - the
+   *  table's own cell geometry - so the visible width is the container minus
+   *  that inset, or the panel runs under the right-hand edge by exactly that
+   *  much. The inset is measured rather than assumed, and only while the table
+   *  is scrolled home: once it is scrolled, the panel is pinned to the edge
+   *  and the measurement would read as zero.
+   */
+  let poDetailInset = null;
+
+  function sizePoDetails() {
+    const table = $('#pos-table');
+    const wrap = table && table.closest('.table-wrap');
+    if (!wrap) return;
+    const body = $('.po-detail:not([hidden]) .po-detail-body', table);
+    if (body && wrap.scrollLeft === 0) {
+      poDetailInset = Math.max(
+        0, Math.round(body.getBoundingClientRect().left - wrap.getBoundingClientRect().left));
+    }
+    table.style.setProperty('--po-visible', `${wrap.clientWidth - (poDetailInset || 0) - 2}px`);
+  }
+
+  window.addEventListener('resize', sizePoDetails);
+
   /** Expand a row to the invoices that actually consumed it. */
   function wirePoRows() {
     $$('#pos-table .po-main').forEach((tr) => {
@@ -2018,12 +2345,15 @@
         detail.hidden = !detail.hidden;
         tr.classList.toggle('is-open', !detail.hidden);
         tr.setAttribute('aria-expanded', String(!detail.hidden));
+        // Measured once the panel is on the page: a hidden element has no box.
+        if (!detail.hidden) sizePoDetails();
         if (detail.hidden || detail.dataset.loaded) return;
         try {
           const po = await api(`/api/pos/${encodeURIComponent(tr.dataset.po)}`);
           const used = po.consumption || [];
           const total = used.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
-          $('.po-detail-body', detail).innerHTML = used.length
+          const own = (state.pos.find((x) => x.po_number === tr.dataset.po) || {}).mine;
+          $('.po-detail-body', detail).innerHTML = (own ? testInvoiceStrip(po) : '') + (used.length
             ? `<table class="po-sub"><thead><tr>
                  <th>Invoice</th><th class="num">Amount</th><th>Source</th>
                  <th>Booked</th><th>Run</th>
@@ -2042,7 +2372,8 @@
                  <td class="num"><b>${money(total, 'INR')}</b></td>
                  <td colspan="3">is what R6 compares the next invoice against</td></tr></tfoot>
                </table>`
-            : '<p class="hint">Nothing has been billed against this PO yet, so rule R6 has no ledger to check and stands aside.</p>';
+            : '<p class="hint">Nothing has been billed against this PO yet, so rule R6 has no ledger to check and stands aside.</p>');
+          wireTestInvoice(detail);
           detail.dataset.loaded = '1';
         } catch (err) {
           $('.po-detail-body', detail).textContent = `Could not load: ${err.message}`;
@@ -2055,9 +2386,565 @@
     });
   }
 
+  // ------------------------------------------- raising a purchase order
+
+  /** Everything in this block exists to make one loop visible end to end:
+   *  raise a purchase order, generate an invoice against it, watch the seven
+   *  stages decide it. A PO master you can only read makes the interesting
+   *  half of the system undemonstrable on anything but the twelve seeded rows.
+   *
+   *  The separation between the two halves is deliberate and shown in three
+   *  places - a tag on the row, a filter beside the health filters, and a
+   *  count in the budget panel - because a figure on this page is a figure a
+   *  payment gets decided on, and "is this real procurement data or something
+   *  I typed in a demo?" must never be a question.
+   */
+
+  const DEFAULT_PO_WINDOW_DAYS = 90;
+
+  /** Suggest the next free number in the user's own range.
+   *
+   *  The seeded masters occupy PO-4471 to PO-4482, so anything raised here
+   *  starts at PO-9001: the number itself says which half of the table a row
+   *  came from, even in a screenshot with no styling.
+   */
+  function suggestPoNumber() {
+    const mine = state.pos
+      .map((po) => /^PO-9(\d{3})$/.exec(po.po_number))
+      .filter(Boolean)
+      .map((m) => Number(m[1]));
+    return `PO-9${String((mine.length ? Math.max(...mine) : 0) + 1).padStart(3, '0')}`;
+  }
+
+  const isoDay = (date) => date.toISOString().slice(0, 10);
+
+  let poFormReady = false;
+
+  async function loadPoForm() {
+    if (!state.vendors.length) {
+      try { state.vendors = await api('/api/vendors'); } catch (err) { state.vendors = []; }
+    }
+    if (!state.variants.length) {
+      try { state.variants = await api('/api/pos/variants'); } catch (err) { state.variants = []; }
+    }
+
+    // Blocked vendors are listed but disabled rather than hidden: the point of
+    // the control is to show that the approved list is what a PO may name, and
+    // silently dropping a vendor would just raise the question of where they
+    // went. Same reasoning as the provider switch.
+    //
+    // Only the first visit resets the fields. `showTab` runs this every time
+    // the tab is activated, and resetting here wiped a half-filled form for
+    // anyone who stepped over to Rules & data to look a vendor up - including
+    // the vendor they had just added and selected.
+    if (poFormReady) {
+      renderVendorOptions($('#np-vendor') ? $('#np-vendor').value : '');
+      return;
+    }
+    poFormReady = true;
+    renderVendorOptions();
+    resetPoForm();
+  }
+
+  /** The vendor picker: a listbox of our own, not a native select.
+   *
+   *  The native control's drop-down is drawn by the operating system. It can
+   *  show one line of text per option and nothing else - so the vendor code,
+   *  the tax number, a blocked supplier and one you added yourself all look
+   *  identical, and the list looks like nothing else on the page. Those are
+   *  exactly the distinctions that decide whether a PO can ever pay an
+   *  invoice, so they belong inside the control.
+   *
+   *  The chosen value lives in a hidden input, which is what the rest of the
+   *  form reads - so this is a change to how the choice is presented, not to
+   *  how a purchase order is submitted.
+   */
+  const VENDOR_PLACEHOLDER = 'Choose an approved vendor\u2026';
+
+  function renderVendorOptions(selected = '') {
+    const pop = $('#np-vendor-pop');
+    if (!pop) return;
+
+    const mine = state.vendors.filter((v) => v.source === 'user');
+    const seeded = state.vendors.filter((v) => v.source !== 'user');
+
+    const row = (vendor) => {
+      const blocked = vendor.status !== 'approved';
+      // The name, and nothing else. A code and a tax number are what the row
+      // in the master is for; in a picker they are three lines of noise around
+      // the one word someone is looking for.
+      return `
+        <button class="pick-opt${blocked ? ' is-blocked' : ''}" type="button" role="option"
+                aria-selected="${vendor.vendor_id === selected}"
+                aria-disabled="${blocked}" data-value="${esc(vendor.vendor_id)}"
+                title="${esc(vendor.vendor_id)}${vendor.gstin ? ' · GSTIN ' + esc(vendor.gstin) : ''}">
+          <span class="pick-name">${esc(vendor.name)}</span>
+          ${vendor.source === 'user' ? '<span class="po-mine">added by you</span>' : ''}
+          ${blocked ? `<span class="pick-flag">${esc(vendor.status)}</span>` : ''}
+          <span class="pick-check" aria-hidden="true">&#10003;</span>
+        </button>`;
+    };
+
+    const group = (label, rows) =>
+      rows.length ? `<div class="pick-group">${esc(label)}</div>${rows.map(row).join('')}` : '';
+
+    pop.innerHTML = group('Approved vendors', seeded)
+      + group('Added by you', mine)
+      + `<div class="pick-sep"></div>
+         <button class="pick-opt is-add" type="button" role="option"
+                 aria-selected="false" data-value="__new__">
+           <span class="pick-plus" aria-hidden="true">+</span>
+           <span class="pick-name">Add a new vendor</span>
+         </button>`;
+
+    $('#np-vendor').value = selected;
+    paintVendorButton();
+    wireVendorOptions();
+  }
+
+  function wireVendorOptions() {
+    $$('#np-vendor-pop .pick-opt').forEach((option) => {
+      option.addEventListener('click', () => {
+        if (option.getAttribute('aria-disabled') === 'true') return;
+        chooseVendor(option.dataset.value);
+      });
+    });
+  }
+
+  function chooseVendor(value) {
+    $('#np-vendor').value = value;
+    $$('#np-vendor-pop .pick-opt').forEach((option) =>
+      option.setAttribute('aria-selected', String(option.dataset.value === value)));
+    paintVendorButton();
+    openVendorPicker(false);
+    if (value === '__new__') {
+      openVendorModal('picker');
+      return;
+    }
+    const button = $('#np-vendor-btn');
+    if (button) button.focus();
+  }
+
+  /** Closed, the control shows what a row of the list showed: the name, with
+   *  the code beside it. Nothing chosen yet is a prompt rather than a value,
+   *  so it is set in the ink a placeholder gets. */
+  function paintVendorButton() {
+    const button = $('#np-vendor-btn');
+    const field = $('#np-vendor');
+    if (!button || !field) return;
+    const label = $('.pick-val', button);
+    const vendor = state.vendors.find((v) => v.vendor_id === field.value);
+    button.classList.toggle('is-adding', field.value === '__new__');
+    label.classList.toggle('is-empty', !field.value);
+    if (field.value === '__new__') {
+      label.textContent = 'Adding a new vendor';
+    } else if (vendor) {
+      label.textContent = vendor.name;
+    } else {
+      label.textContent = VENDOR_PLACEHOLDER;
+    }
+  }
+
+  function openVendorPicker(on) {
+    const pop = $('#np-vendor-pop');
+    const button = $('#np-vendor-btn');
+    if (!pop || !button) return;
+    pop.hidden = !on;
+    button.setAttribute('aria-expanded', String(!!on));
+    button.classList.toggle('is-open', !!on);
+    if (on) {
+      const current = $('#np-vendor-pop .pick-opt[aria-selected="true"]')
+        || $('#np-vendor-pop .pick-opt');
+      if (current) current.focus();
+    }
+  }
+
+  /** Arrow keys walk the list, Enter picks, Escape closes, a click outside
+   *  closes - the four things a native select does for free and a custom one
+   *  has to be given back. */
+  function wireVendorPicker() {
+    const button = $('#np-vendor-btn');
+    const pop = $('#np-vendor-pop');
+    if (!button || !pop) return;
+
+    button.addEventListener('click', () => openVendorPicker(pop.hidden));
+    button.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') { event.preventDefault(); openVendorPicker(true); }
+    });
+
+    pop.addEventListener('keydown', (event) => {
+      const options = $$('#np-vendor-pop .pick-opt')
+        .filter((o) => o.getAttribute('aria-disabled') !== 'true');
+      const here = options.indexOf(document.activeElement);
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const next = event.key === 'ArrowDown'
+          ? Math.min(here + 1, options.length - 1)
+          : Math.max(here - 1, 0);
+        (options[next] || options[0]).focus();
+      } else if (event.key === 'Escape') {
+        openVendorPicker(false);
+        button.focus();
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!pop.hidden && !event.target.closest('#np-vendor-pick')) openVendorPicker(false);
+    });
+  }
+
+  /** Adding a vendor, as a dialog over the page.
+   *
+   *  It was a panel inside the purchase-order form, which was wrong twice: it
+   *  pushed the rest of the form down under whoever was filling it in, and it
+   *  made a short self-contained errand look like part of a longer one. A
+   *  dialog states the one question it needs answered - what is this supplier
+   *  called - and puts everything else behind a disclosure.
+   *
+   *  `returnTo` is where the new vendor should land. From the PO form it is
+   *  selected in the picker; from the vendor master it just appears in the
+   *  table.
+   */
+  let vendorReturnTo = null;
+
+  function openVendorModal(returnTo) {
+    const modal = $('#nv-modal');
+    if (!modal) return;
+    vendorReturnTo = returnTo || null;
+    modal.hidden = false;
+    document.body.classList.add('is-modal');
+    $('#nv-note').textContent = '';
+    $('#nv-note').className = 'save-note';
+    const name = $('#nv-name');
+    name.value = '';
+    name.focus();
+  }
+
+  function closeVendorModal() {
+    const modal = $('#nv-modal');
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    document.body.classList.remove('is-modal');
+    // The picker still reads "Adding a new vendor" if that is what opened it,
+    // and nothing was added - so put it back to nothing chosen.
+    if (vendorReturnTo === 'picker' && $('#np-vendor') && $('#np-vendor').value === '__new__') {
+      chooseVendor('');
+    }
+    vendorReturnTo = null;
+  }
+
+  function wireVendorModal() {
+    const modal = $('#nv-modal');
+    if (!modal) return;
+
+    $$('[data-nv-close]', modal).forEach((node) =>
+      node.addEventListener('click', closeVendorModal));
+
+    $('#nv-save').addEventListener('click', createVendor);
+    $('#nv-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      createVendor();
+    });
+
+    // Escape closes it, and focus is kept inside while it is open - the two
+    // things a dialog owes anyone not using a mouse.
+    document.addEventListener('keydown', (event) => {
+      if (modal.hidden) return;
+      if (event.key === 'Escape') { closeVendorModal(); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = $$('button, input, summary, [href]', modal)
+        .filter((node) => node.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    });
+
+    // Every way into the dialog, wherever the button happens to be.
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('[data-add-vendor]')) openVendorModal('master');
+    });
+  }
+
+  function resetPoForm() {
+    const today = new Date();
+    const later = new Date(today.getTime() + DEFAULT_PO_WINDOW_DAYS * DAY_MS);
+    if ($('#np-number')) $('#np-number').value = suggestPoNumber();
+    if ($('#np-desc')) $('#np-desc').value = '';
+    if ($('#np-value')) $('#np-value').value = '';
+    if ($('#np-vendor')) renderVendorOptions('');
+    if ($('#np-issued')) $('#np-issued').value = isoDay(today);
+    if ($('#np-expiry')) $('#np-expiry').value = isoDay(later);
+    if ($('#np-note')) $('#np-note').textContent = '';
+  }
+
+  async function createPo() {
+    const note = $('#np-note');
+    const payload = {
+      po_number: $('#np-number').value.trim().toUpperCase(),
+      vendor_id: $('#np-vendor').value,
+      description: $('#np-desc').value.trim(),
+      po_value: Number($('#np-value').value),
+      issued_date: $('#np-issued').value,
+      expiry_date: $('#np-expiry').value || null,
+    };
+
+    // The three mistakes worth catching without a round trip. Everything else
+    // is validated server-side, where it has to be anyway.
+    if (!payload.po_number) return fail(note, 'Give the purchase order a number.');
+    if (!payload.vendor_id) return fail(note, 'Choose the vendor this PO is raised on.');
+    if (payload.vendor_id === '__new__') {
+      return fail(note, 'Add the new vendor first, then raise the PO against it.');
+    }
+    if (!payload.po_value || payload.po_value <= 0) {
+      return fail(note, 'Enter the PO value in rupees.');
+    }
+
+    const button = $('#np-save');
+    button.disabled = true;
+    note.className = 'save-note';
+    note.textContent = 'Writing it to the purchase-order master\u2026';
+    try {
+      const created = await api('/api/pos', { method: 'POST', body: JSON.stringify(payload) });
+      note.textContent = '';
+      await loadPos();
+
+      state.posFilter = 'MINE';
+      $$('#po-filters .chip').forEach((chip) =>
+        chip.classList.toggle('is-active', chip.dataset.pofilter === 'MINE'));
+      state.posQuery = '';
+      $('#po-search').value = '';
+      renderPosTable();
+      renderPoCreated(created);
+      resetPoForm();
+      toast(`${created.po_number} added to the purchase-order master`);
+    } catch (err) {
+      fail(note, err.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  /** Put a message under a form and mark it as a problem. Returns null so a
+   *  caller can `return fail(...)` in one line. */
+  function fail(note, message) {
+    note.className = 'save-note is-err';
+    note.textContent = message;
+    return null;
+  }
+
+  async function createVendor() {
+    const note = $('#nv-note');
+    const button = $('#nv-save');
+    const payload = {
+      name: $('#nv-name').value.trim(),
+      aliases: $('#nv-aliases').value.trim(),
+      gstin: $('#nv-gstin').value.trim() || null,
+      payment_terms_days: Number($('#nv-terms').value || 30),
+    };
+    if (payload.name.length < 3) return fail(note, 'Give the vendor its registered name.');
+
+    button.disabled = true;
+    note.className = 'save-note';
+    note.textContent = 'Adding it to the approved master…';
+    try {
+      const created = await api('/api/vendors', { method: 'POST', body: JSON.stringify(payload) });
+      state.vendors = await api('/api/vendors');
+      const landed = vendorReturnTo;
+
+      // Leave the dialog clean for next time. Guarded, because the vendor is
+      // already created by this point - a missing field here must not throw
+      // and leave the dialog open over work that succeeded.
+      ['#nv-name', '#nv-aliases', '#nv-gstin'].forEach((sel) => {
+        const field = $(sel);
+        if (field) field.value = '';
+      });
+      if ($('#nv-terms')) $('#nv-terms').value = 30;
+      const more = $('#nv-form .modal-more');
+      if (more) more.open = false;
+
+      vendorReturnTo = null;
+      $('#nv-modal').hidden = true;
+      document.body.classList.remove('is-modal');
+
+      if (landed === 'picker') {
+        renderVendorOptions(created.vendor_id);
+        toast(`${created.name} added as ${created.vendor_id}, and selected`);
+      } else {
+        renderVendorOptions($('#np-vendor') ? $('#np-vendor').value : '');
+        renderVendors(state.vendors);
+        toast(`${created.name} added as ${created.vendor_id}`);
+      }
+    } catch (err) {
+      fail(note, err.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  /** The panel that appears after an insert.
+   *
+   *  It is not a success message. A PO on its own decides nothing, so this is
+   *  where the generated invoices live: one click per variant, each one a real
+   *  PDF through the real pipeline, and each one stating the verdict it should
+   *  earn *before* it runs. A demo that announces its expectation first is a
+   *  demo you can catch being wrong.
+   */
+  function renderPoCreated(po) {
+    const node = $('#np-done');
+    if (!node) return;
+    node.hidden = false;
+    node.innerHTML = `
+      <div class="npo-done-head">
+        <code class="po-code">${esc(po.po_number)}</code>
+        <span class="po-mine">added by you</span>
+        <span class="npo-done-sum">${esc(po.vendor_name || po.vendor_id)} ·
+          ${money(po.po_value, 'INR')} · open until ${esc(po.expiry_date || 'further notice')}</span>
+      </div>
+      <p class="npo-done-lead">It is live in the master now &mdash; stage 5 will score invoices
+         against it like any other PO. Nothing has been billed to it, so there is nothing to
+         check yet. Generate an invoice against it and watch all seven stages run:</p>
+      ${variantButtons(po.po_number)}
+      <p class="hint">Each one is a genuine single-page PDF with a real text layer, written by
+         <code>backend/invoice_pdf.py</code> and submitted through the same
+         <code>POST /api/runs</code> path as a file you drag in. The pipeline cannot tell the
+         difference &mdash; and the verdict is whatever the nine rules make of it.</p>`;
+    wireTestInvoice(node);
+  }
+
+  const EXPECT_COPY = {
+    APPROVE: 'should be approved',
+    FLAG: 'should be flagged for a human',
+    REJECT: 'should be rejected',
+  };
+
+  function variantButtons(poNumber) {
+    if (!state.variants.length) {
+      return '<p class="hint">The generated-invoice variants could not be loaded.</p>';
+    }
+    return `<div class="tiv" data-tiv-po="${esc(poNumber)}">${state.variants.map((v) => `
+      <button class="tiv-btn" type="button" data-variant="${esc(v.id)}">
+        <span class="tiv-top">
+          <span class="tiv-label">${esc(v.label)}</span>
+          ${decisionBadge(v.expect)}
+        </span>
+        <span class="tiv-why">${esc(v.why)}</span>
+        <span class="tiv-go">Generate it and run it &rarr;
+          <em>${esc(EXPECT_COPY[v.expect] || '')}</em></span>
+      </button>`).join('')}</div>`;
+  }
+
+  /** The same three actions, on the expanded row of any PO you raised. */
+  function testInvoiceStrip(po) {
+    return `
+      <div class="tiv-wrap">
+        <div class="tiv-head">
+          <span>Check an invoice against ${esc(po.po_number)}</span>
+          <button class="btn btn-ghost btn-sm" type="button"
+                  data-po-delete="${esc(po.po_number)}">Delete this PO</button>
+        </div>
+        ${variantButtons(po.po_number)}
+      </div>`;
+  }
+
+  function wireTestInvoice(root) {
+    $$('.tiv', root).forEach((group) => {
+      $$('.tiv-btn', group).forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();          // the PO row is itself a button
+          runTestInvoice(group.dataset.tivPo, button.dataset.variant, button);
+        });
+      });
+    });
+    $$('[data-po-delete]', root).forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        deletePo(button.dataset.poDelete);
+      });
+    });
+  }
+
+  /** Generate an invoice for a PO and attach the run view to it.
+   *
+   *  `attachRun` already switches to the Check-an-invoice tab, so the click
+   *  lands on the live tracker with stage 1 already running. The declared
+   *  expectation travels with it so the verdict can be read against what was
+   *  promised.
+   */
+  async function runTestInvoice(poNumber, variant, button) {
+    if (button) button.disabled = true;
+    try {
+      const started = await api(
+        `/api/pos/${encodeURIComponent(poNumber)}/test-invoice`,
+        { method: 'POST', body: JSON.stringify({ variant }) },
+      );
+      attachRun(started.run_id, started.filename, started);
+    } catch (err) {
+      toast(`Could not generate an invoice: ${err.message}`, true);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function deletePo(poNumber) {
+    if (!window.confirm(
+      `Delete ${poNumber}, and forget the generated test invoices run against it?`)) return;
+    try {
+      const out = await api(`/api/pos/${encodeURIComponent(poNumber)}`, { method: 'DELETE' });
+      $('#np-done').hidden = true;
+      await loadPos();
+      toast(out.test_runs_cleared
+        ? `${poNumber} deleted, with ${out.test_runs_cleared} generated run(s)`
+        : `${poNumber} deleted`);
+    } catch (err) {
+      toast(`Could not delete ${poNumber}: ${err.message}`, true);
+    }
+  }
+
+  /** What a generated invoice was built to demonstrate, above the tracker.
+   *
+   *  While it runs this states the expectation; once the decision lands it
+   *  says whether the pipeline agreed. The honest case matters more than the
+   *  happy one: if the rules reach a different verdict, this says so rather
+   *  than quietly keeping the label.
+   */
+  function renderIntent() {
+    const node = $('#run-intent');
+    if (!node) return;
+    const intent = state.intent;
+    if (!intent) { node.hidden = true; node.innerHTML = ''; return; }
+
+    const actual = state.run && state.run.decision ? state.run.decision.decision : null;
+    const agreed = actual ? actual === intent.expect : null;
+    node.hidden = false;
+    node.className = `intent ${agreed === null ? '' : agreed ? 'is-agreed' : 'is-diverged'}`;
+    node.innerHTML = `
+      <div class="intent-k">Generated for ${esc(intent.po_number)}</div>
+      <div class="intent-body">
+        <p class="intent-lead">${esc(intent.label)} &mdash; ${money(intent.total, 'INR')}
+           against a ${money(intent.po_value, 'INR')} purchase order
+           (<b>${intent.variance_pct > 0 ? '+' : ''}${esc(intent.variance_pct)}%</b>).</p>
+        <p class="intent-why">${esc(intent.why)}</p>
+      </div>
+      <div class="intent-verdict">
+        <div class="intent-row"><span>Expected</span>${decisionBadge(intent.expect)}</div>
+        <div class="intent-row"><span>Decided</span>${
+          actual ? decisionBadge(actual) : '<span class="badge badge-live">running…</span>'}</div>
+        ${agreed === false
+          ? `<p class="intent-note">The rules reached a different verdict. That is the record,
+               not a bug in the label - open the checks below to see which rule decided it.</p>`
+          : ''}
+      </div>`;
+  }
+
   function renderVendors(vendors) {
     $('#vendors-table tbody').innerHTML = vendors.map((vendor) => `<tr>
-      <td><code>${esc(vendor.vendor_id)}</code></td>
+      <td><code>${esc(vendor.vendor_id)}</code>${vendor.source === 'user'
+        ? ' <span class="po-mine">added by you</span>' : ''}</td>
       <td>${esc(vendor.name)}</td>
       <td class="wrap">${esc((vendor.aliases || []).join(', '))}</td>
       <td><code>${esc(vendor.gstin || '—')}</code></td>
@@ -2114,10 +3001,13 @@
       loadAdmin();
       loadHealth();
       if (clearRuns) {
+        // The run that was on screen no longer exists, so go back to the
+        // intake rather than leaving a record that cannot be re-opened.
+        if (state.source) { state.source.close(); state.source = null; }
         state.runs = [];
         state.run = null;
-        $('#run-live').hidden = true;
-        $('#run-empty').hidden = false;
+        state.stages = [];
+        showResultView(false);
       }
     } catch (err) {
       note.classList.add('is-err');
@@ -2221,13 +3111,91 @@
       });
     });
 
+    const save = $('#np-save');
+    if (save) {
+      $('#np-clear').addEventListener('click', () => { resetPoForm(); $('#np-done').hidden = true; });
+      // One handler, not two. `#np-save` sits outside the form in the card's
+      // action row and is tied back to it with the `form` attribute, so a
+      // click and an Enter keypress both arrive here as the same submit.
+      $('#new-po-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        createPo();
+      });
+
+      wireVendorPicker();
+    }
+
+    // The "N added by you" pill in the budget panel is also the filter for it.
+    document.addEventListener('click', (event) => {
+      const go = event.target.closest('[data-pofilter-go]');
+      if (!go) return;
+      state.posFilter = go.dataset.pofilterGo;
+      $$('#po-filters .chip').forEach((chip) =>
+        chip.classList.toggle('is-active', chip.dataset.pofilter === state.posFilter));
+      renderPosTable();
+      $('#pos-table').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+
     $('#config-save').addEventListener('click', saveConfig);
     $('#config-reset').addEventListener('click', resetConfig);
     $('#reseed-btn').addEventListener('click', () => reseed(false));
     $('#reseed-all-btn').addEventListener('click', () => reseed(true));
   }
 
+  /** Fold the whole run story away.
+   *
+   *  Separate from "Expand all", which opens the payload under each step: this
+   *  is the section, that is what is inside it. Someone who has read the steps
+   *  once wants the verdict and the document side by side without scrolling
+   *  past seven of them, and someone watching a run happen wants the opposite.
+   *  The state is remembered for the session, because whichever of those two
+   *  you are, you are that for more than one invoice.
+   */
+  let storyFolded = false;
+
+  function setStoryFolded(folded) {
+    const section = $('#run-detail');
+    const toggle = $('#story-toggle');
+    if (!section || !toggle) return;
+    storyFolded = !!folded;
+    section.classList.toggle('is-folded', storyFolded);
+    toggle.setAttribute('aria-expanded', String(!storyFolded));
+    const expand = $('#expand-btn');
+    // Expanding a step's payload inside a panel that is folded shut would do
+    // nothing visible, so that control goes with it.
+    if (expand) expand.hidden = storyFolded;
+  }
+
+  function wireStoryToggle() {
+    const toggle = $('#story-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', () => setStoryFolded(!storyFolded));
+    setStoryFolded(storyFolded);
+  }
+
+  /** Back to top.
+   *
+   *  Four of the six pages are several screens tall - the rule set, the PO
+   *  master, a finished run, and How it works - and the navigation lives in a
+   *  bar at the very top of the document. Appears once scrolling has gone far
+   *  enough for the header to be properly gone.
+   */
+  function wireToTop() {
+    const button = $('#to-top');
+    if (!button) return;
+    const update = () => button.classList.toggle('is-on', window.scrollY > 520);
+    window.addEventListener('scroll', update, { passive: true });
+    button.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    update();
+  }
+
   wire();
+  wireToTop();
+  wireStoryToggle();
+  wireVendorModal();
   loadHealth();
   loadSamples();
+  // The dashboard is the front page: what the system has decided so far is the
+  // first question anyone has, and checking a new invoice is one click from it.
+  showTab('dashboard');
 })();
