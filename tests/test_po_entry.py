@@ -334,5 +334,59 @@ def test_an_in_flight_run_is_not_deleted_out_from_under_itself(tmp_path, monkeyp
     assert left == {"RUN-B", "RUN-C"}      # the running one and the unrelated one
 
 
+
+
+# --------------------------------------------------------------------------- #
+# Where a deployed copy keeps what you enter
+# --------------------------------------------------------------------------- #
+
+def test_state_dir_moves_the_database_and_the_blobs_together(tmp_path, monkeypatch):
+    """`STATE_DIR` is the single switch, and it has to win over a `DB_PATH`
+    left in a local `.env` - honouring both independently is how the database
+    ends up back in the container while the blobs go to the volume, which
+    silently loses a purchase order at the next restart."""
+    monkeypatch.setenv("STATE_DIR", str(tmp_path / "vol"))
+    monkeypatch.setenv("DB_PATH", "data/invoices.db")       # the trap
+    import importlib
+    from backend import config as config_mod
+    cfg = importlib.reload(config_mod)
+    try:
+        assert cfg.DB_PATH == tmp_path / "vol" / "invoices.db"
+        assert cfg.UPLOAD_DIR == tmp_path / "vol" / "uploads"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config_mod)
+
+
+def test_an_empty_volume_is_seeded_once_and_never_overwritten(tmp_path, monkeypatch):
+    monkeypatch.setenv("STATE_DIR", str(tmp_path / "vol"))
+    import importlib
+    from backend import config as config_mod
+    cfg = importlib.reload(config_mod)
+    try:
+        first = cfg.bootstrap_state()
+        assert first["db"] is True                   # the seeded database lands
+        assert first["uploads"] > 0                  # and the stored PDFs with it
+        assert cfg.DB_PATH.exists()
+
+        # Something the deployed copy wrote afterwards.
+        marker = cfg.DB_PATH.read_bytes()
+        cfg.DB_PATH.write_bytes(marker + b"\n-- raised on the live site")
+
+        second = cfg.bootstrap_state()
+        assert second == {"db": False, "uploads": 0}  # a no-op on the second boot
+        assert cfg.DB_PATH.read_bytes().endswith(b"-- raised on the live site")
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config_mod)
+
+
+def test_without_state_dir_nothing_moves_and_bootstrap_does_nothing():
+    """Every local checkout, and the free-tier deployment, take this path."""
+    from backend import config as config_mod
+    assert config_mod.DB_PATH.parent == config_mod.DATA_DIR
+    assert config_mod.bootstrap_state() == {"db": False, "uploads": 0}
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -5,7 +5,37 @@ services:
     plan: free
     autoDeploy: true
     healthCheckPath: /api/health
+
+    # ---------------------------------------------------------------------
+    # Storage that outlives a restart.
+    #
+    # As shipped this service writes its SQLite database inside the container,
+    # which the host throws away on every redeploy and every wake from sleep.
+    # A purchase order raised on the live site is therefore real, and queryable,
+    # and gone at the next cold start.
+    #
+    # To keep it: uncomment the `disk` block and the `STATE_DIR` variable
+    # below, and change `plan: free` above to `plan: starter`. Render only
+    # attaches disks to paid instance types, which is the whole of why this is
+    # not the default - a blueprint asking for a disk on the free plan is
+    # rejected outright and the deploy never starts.
+    #
+    # Nothing else changes. `config.bootstrap_state()` copies the seeded
+    # database and the stored PDF of all fourteen runs onto the disk the first
+    # time it mounts, so the deployment still opens with its history, and it
+    # never writes over anything that is already there.
+    #
+    # disk:
+    #   name: ps1-state
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # ---------------------------------------------------------------------
+
     envVars:
+      # The one switch for the above. Set, and both the database and the run
+      # blobs live on the mounted disk; unset, and both stay in the container.
+      # - key: STATE_DIR
+      #   value: /var/data
       - key: EXTRACTION_PROVIDER
         value: gemini
       # Set the key in the Render dashboard; it is deliberately not synced from

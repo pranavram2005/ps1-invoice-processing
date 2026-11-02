@@ -2385,7 +2385,15 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
    An expanded row is a panel, not a row of cells, so it has no business being
    as wide as the table: pinned to the left of the scroll area and given the
    visible width (measured in `renderPosTable`, because CSS cannot know it), it
-   stays whole and aligned however far the table is scrolled. */
+   stays whole and aligned however far the table is scrolled.
+
+   `white-space` is reset because `table.grid td` sets `nowrap` - right for a
+   cell holding a figure or a date, wrong for a panel of prose. Inherited into
+   here it did two things: the descriptions ran off the side of their cards,
+   and, because a nowrap paragraph's min-content width is the whole sentence,
+   it forced the grid track open far past the row it sits in. */
+.po-detail > td, .po-detail-body { white-space: normal; }
+
 .po-detail-body {
   position: sticky;
   left: 0;
@@ -2833,7 +2841,27 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
-.npo-done-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+/* The header is the control for the panel under it. */
+.npo-done-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  cursor: pointer;
+}
+.npo-caret { flex: none; color: var(--ink-3); transition: transform .16s; }
+.npo-done.is-folded .npo-caret { transform: rotate(-90deg); }
+.npo-done.is-folded .npo-done-body { display: none; }
+.npo-done-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.npo-done-head:hover .po-code { border-color: var(--accent); color: var(--accent-ink); }
+
 .npo-done-sum { font-size: 12.5px; color: var(--ink-3); }
 .npo-done-lead {
   margin: 10px 0 14px;
@@ -2857,11 +2885,22 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
   margin-bottom: 10px;
 }
 
+/* `minmax(0, …)` everywhere, and `min-width: 0` on the cards.
+   A bare `1fr` track carries an automatic minimum of its content's min-content
+   width, so one nowrap child inside a card can force the whole track wider
+   than the grid - which is what happened here: a single-column track resolved
+   to 1095px inside an 803px row and pushed the cards off the right of the
+   page. `minmax(0, 1fr)` lets the track shrink; `min-width: 0` lets the card
+   inside it shrink with it. The `min()` on the auto-fit floor does the same
+   job for a container narrower than one card. */
 .tiv {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(236px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(236px, 100%), 1fr));
   gap: 10px;
 }
+.tiv-btn { min-width: 0; }
+.tiv-btn > * { min-width: 0; }
+.tiv-label, .tiv-why, .tiv-go { overflow-wrap: anywhere; }
 
 /* Inside an expanded row the three sit on one line at any sane width. */
 .po-detail-body .tiv { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -2869,7 +2908,7 @@ table.grid td.wrap { white-space: normal; min-width: 170px; }
 .po-detail-body .tiv-why { font-size: 11px; }
 
 @media (max-width: 900px) {
-  .po-detail-body .tiv { grid-template-columns: 1fr; }
+  .po-detail-body .tiv { grid-template-columns: minmax(0, 1fr); }
 }
 
 .tiv-btn {

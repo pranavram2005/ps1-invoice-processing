@@ -64,12 +64,22 @@ explain_cache: dict[str, dict] = {}
 
 @app.on_event("startup")
 def _startup() -> None:
+    # Before anything reads it: if the database lives on a mounted volume that
+    # is still empty, put the seeded copy and its stored PDFs there.
+    copied = config_mod.bootstrap_state()
+    if copied["db"] or copied["uploads"]:
+        log.info(
+            "bootstrapped %s from the bundled seed (db=%s, %d stored PDF(s))",
+            config_mod.STATE_DIR, copied["db"], copied["uploads"],
+        )
+
     db.init_db()
     seed.seed_masters_if_empty()
     state.load_from_db()
     log.info(
-        "ready - %d vendors, %d POs, %d runs, model=%s",
+        "ready - %d vendors, %d POs, %d runs, model=%s, state=%s",
         len(db.list_vendors()), len(db.list_pos()), db.count_runs(), active_model(),
+        config_mod.STATE_DIR,
     )
 
 

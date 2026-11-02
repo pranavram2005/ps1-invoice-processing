@@ -124,15 +124,53 @@ REQUEST_TIMEOUT_S = int(os.getenv("REQUEST_TIMEOUT_S", "180"))
 #           insurance for a live demo; the UI always says which path ran.
 EXTRACTION_MODE = os.getenv("EXTRACTION_MODE", "live").strip().lower()
 
-DB_PATH = Path(os.getenv("DB_PATH", "data/invoices.db"))
-if not DB_PATH.is_absolute():
-    DB_PATH = ROOT / DB_PATH
-
+# Read-only material that ships inside the image: the sample invoices, the
+# offline fixtures, and the seeded database the app starts from.
 DATA_DIR = ROOT / "data"
 FIXTURES_PATH = DATA_DIR / "fixtures.json"
-UPLOAD_DIR = DATA_DIR / "uploads"
 SAMPLE_INVOICE_DIR = DATA_DIR / "invoices"
 FRONTEND_DIR = ROOT / "frontend"
+
+BUNDLED_DB = DATA_DIR / "invoices.db"
+BUNDLED_UPLOADS = DATA_DIR / "uploads"
+
+# Where everything the app *writes* lives: the database, and the stored PDF of
+# every run.
+#
+# It defaults to the bundled `data/` directory, which is what a local checkout
+# wants - but a container's filesystem is thrown away on every restart, so a
+# purchase order raised on a deployed copy would last only until the host next
+# put the service to sleep. Pointing `STATE_DIR` at a mounted volume moves both
+# the database and the blobs onto storage that survives, and
+# `bootstrap_state()` copies the seeded versions across the first time it runs
+# so the deployment still opens with its history intact.
+_STATE_DIR_SET = bool(os.getenv("STATE_DIR", "").strip())
+
+STATE_DIR = Path(os.getenv("STATE_DIR", "").strip() or str(DATA_DIR))
+if not STATE_DIR.is_absolute():
+    STATE_DIR = ROOT / STATE_DIR
+
+
+def _state_path(env_name: str, default: Path) -> Path:
+    """Resolve one writable path.
+
+    `STATE_DIR` is the single switch, and when it is set it wins outright -
+    including over a `DB_PATH` left over from a local `.env`. Having both
+    honoured independently is how the first version of this put the database
+    back in the image while the blobs went to the volume, which is the one
+    outcome that would quietly lose a purchase order on the next restart.
+    """
+    if _STATE_DIR_SET:
+        return default
+    raw = os.getenv(env_name, "").strip()
+    if not raw:
+        return default
+    value = Path(raw)
+    return value if value.is_absolute() else ROOT / value
+
+
+DB_PATH = _state_path("DB_PATH", STATE_DIR / "invoices.db")
+UPLOAD_DIR = _state_path("UPLOAD_DIR", STATE_DIR / "uploads")
 
 PORT = int(os.getenv("PORT", "8000"))
 
@@ -169,6 +207,36 @@ MODEL_PRICING_USD_PER_MTOK: dict[str, tuple[float, float]] = {
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLE_INVOICE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def bootstrap_state() -> dict:
+    """Put the seeded database and run PDFs on the state volume, once.
+
+    An empty mounted volume would otherwise give a deployment an empty
+    dashboard on its first boot, and - worse - a database the app would seed
+    from scratch while the fourteen stored PDFs the shipped history points at
+    stayed behind in the image.
+
+    Only ever copies into a *missing* target, so it cannot overwrite work
+    somebody did on the deployed copy. A no-op when `STATE_DIR` is the bundled
+    directory, which is every local checkout.
+    """
+    copied = {"db": False, "uploads": 0}
+    if STATE_DIR.resolve() == DATA_DIR.resolve():
+        return copied
+
+    if not DB_PATH.exists() and BUNDLED_DB.exists():
+        DB_PATH.write_bytes(BUNDLED_DB.read_bytes())
+        copied["db"] = True
+
+    if BUNDLED_UPLOADS.is_dir() and UPLOAD_DIR.resolve() != BUNDLED_UPLOADS.resolve():
+        for blob in BUNDLED_UPLOADS.glob("*.pdf"):
+            target = UPLOAD_DIR / blob.name
+            if not target.exists():
+                target.write_bytes(blob.read_bytes())
+                copied["uploads"] += 1
+
+    return copied
 
 
 # --------------------------------------------------------------------------- #

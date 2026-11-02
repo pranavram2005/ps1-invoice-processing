@@ -35,8 +35,12 @@ node_modules/
 tools/invoice_gen/node_modules/
 
 # Local run artefacts. The seeded data/invoices.db IS wanted, so it is not
-# listed here; uploads and screenshots are regenerated and are not.
-data/uploads/
+# listed here - and neither is data/uploads/, which was excluded until it was
+# noticed that the shipped history points at it: every one of the fourteen
+# seeded runs stores its PDF there, so leaving them out meant the document
+# pane and "Open PDF" both 404'd on anything in the deployed dashboard. The
+# twenty-three blobs are 1.7 MB, which is a fair price for a history that
+# works.
 data/ui-check/
 
 # Editors / OS

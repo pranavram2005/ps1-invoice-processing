@@ -2798,21 +2798,37 @@
     const node = $('#np-done');
     if (!node) return;
     node.hidden = false;
+    // The header stays; everything under it folds. Raising several POs in a
+    // row otherwise pushes the form further down the page each time, and once
+    // you know what the three buttons do you want the row, not the briefing.
     node.innerHTML = `
-      <div class="npo-done-head">
+      <button class="npo-done-head" type="button" aria-expanded="true" aria-controls="npo-done-body">
+        <svg class="npo-caret" viewBox="0 0 12 8" width="11" height="7" aria-hidden="true">
+          <path d="M1 1.5 6 6.5 11 1.5" fill="none" stroke="currentColor"
+                stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
         <code class="po-code">${esc(po.po_number)}</code>
         <span class="po-mine">added by you</span>
         <span class="npo-done-sum">${esc(po.vendor_name || po.vendor_id)} ·
           ${money(po.po_value, 'INR')} · open until ${esc(po.expiry_date || 'further notice')}</span>
-      </div>
-      <p class="npo-done-lead">It is live in the master now &mdash; stage 5 will score invoices
-         against it like any other PO. Nothing has been billed to it, so there is nothing to
-         check yet. Generate an invoice against it and watch all seven stages run:</p>
-      ${variantButtons(po.po_number)}
-      <p class="hint">Each one is a genuine single-page PDF with a real text layer, written by
-         <code>backend/invoice_pdf.py</code> and submitted through the same
-         <code>POST /api/runs</code> path as a file you drag in. The pipeline cannot tell the
-         difference &mdash; and the verdict is whatever the nine rules make of it.</p>`;
+      </button>
+      <div class="npo-done-body" id="npo-done-body">
+        <p class="npo-done-lead">It is live in the master now &mdash; stage 5 will score invoices
+           against it like any other PO. Nothing has been billed to it, so there is nothing to
+           check yet. Generate an invoice against it and watch all seven stages run:</p>
+        ${variantButtons(po.po_number)}
+        <p class="hint">Each one is a genuine single-page PDF with a real text layer, written by
+           <code>backend/invoice_pdf.py</code> and submitted through the same
+           <code>POST /api/runs</code> path as a file you drag in. The pipeline cannot tell the
+           difference &mdash; and the verdict is whatever the nine rules make of it.</p>
+      </div>`;
+
+    const head = $('.npo-done-head', node);
+    head.addEventListener('click', () => {
+      const open = node.classList.toggle('is-folded');
+      head.setAttribute('aria-expanded', String(!open));
+    });
+
     wireTestInvoice(node);
   }
 
