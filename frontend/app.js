@@ -2813,14 +2813,11 @@
           ${money(po.po_value, 'INR')} · open until ${esc(po.expiry_date || 'further notice')}</span>
       </button>
       <div class="npo-done-body" id="npo-done-body">
-        <p class="npo-done-lead">It is live in the master now &mdash; stage 5 will score invoices
-           against it like any other PO. Nothing has been billed to it, so there is nothing to
-           check yet. Generate an invoice against it and watch all seven stages run:</p>
+        <p class="npo-done-lead">Live in the master now &mdash; stage 5 scores invoices against
+           it like any other PO. Generate one against it:</p>
         ${variantButtons(po.po_number)}
-        <p class="hint">Each one is a genuine single-page PDF with a real text layer, written by
-           <code>backend/invoice_pdf.py</code> and submitted through the same
-           <code>POST /api/runs</code> path as a file you drag in. The pipeline cannot tell the
-           difference &mdash; and the verdict is whatever the nine rules make of it.</p>
+        <p class="hint">A real single-page PDF from <code>backend/invoice_pdf.py</code>,
+           submitted through the same <code>POST /api/runs</code> path as a dragged-in file.</p>
       </div>`;
 
     const head = $('.npo-done-head', node);

@@ -43,8 +43,8 @@
     <!-- State 1: nothing running. The upload is the page. -->
     <div class="intake" id="run-intake">
       <h2 class="intake-h">Check an invoice</h2>
-      <p class="intake-sub">Finds the purchase order, checks the total against it, checks it
-         has not already been paid &mdash; then approves, flags or rejects, and shows why.</p>
+      <p class="intake-sub">Nine checks against the purchase order and the payment history,
+         then a verdict with its reasons.</p>
 
       <div class="dropzone" id="dropzone" tabindex="0" role="button"
            aria-label="Drop an invoice PDF here or click to choose a file">
@@ -108,8 +108,7 @@
             <span>
               <span class="story-h" id="story-title">How this is being processed</span>
               <span class="story-sub">
-                <span class="story-sub-open">Seven steps, in order. Each one says what it does,
-                   what it found, and &mdash; if you want it &mdash; everything it produced.</span>
+                <span class="story-sub-open">Seven steps, in order, with what each one found.</span>
                 <span class="story-sub-shut" id="story-summary"></span>
               </span>
             </span>
@@ -153,8 +152,8 @@
     <div class="sec-head sec-head-cta">
       <div>
         <h2>How the queue is running</h2>
-        <p class="sec-sub">Every invoice processed so far, and what happened to it. Each row is a
-           complete audit record &mdash; open one to replay all seven stages exactly as they ran.</p>
+        <p class="sec-sub">Every invoice processed so far. Open a row to replay its seven
+           stages.</p>
       </div>
       <div class="sec-cta">
         <button class="btn btn-primary" data-goto="run" type="button">Check an invoice</button>
@@ -201,21 +200,15 @@
   <section class="panel" id="panel-pos">
     <div class="sec-head">
       <h2>Purchase orders</h2>
-      <p class="sec-sub">What was ordered, from whom, for how much &mdash; and how much of each
-         budget has already been billed away. Three of the nine checks are decided entirely
-         on this table: <b>R4</b> whether a PO was matched at all, <b>R5</b> whether the
-         invoice sits inside its tolerance, and <b>R6</b> whether cumulative billing has
-         over-consumed it. Open any row for the individual invoices that spent it.</p>
+      <p class="sec-sub">What was ordered, and how much of each budget has been billed away.
+         Rules <b>R4</b>, <b>R5</b> and <b>R6</b> are decided here.</p>
     </div>
 
     <div class="card card-npo" id="new-po-card">
       <div class="card-head">
         <h2>Raise a purchase order</h2>
-        <p class="hint">Anything added here is written to the same <code>pos</code> table the
-           pipeline matches against, tagged <code>source=user</code> so it stays visually
-           separate from the twelve seeded demo POs &mdash; look for the
-           <span class="po-mine">added by you</span> tag. Once it exists you can generate an
-           invoice against it and watch all seven stages decide it.</p>
+        <p class="hint">Written to the same <code>pos</code> table the pipeline matches
+           against, tagged <span class="po-mine">added by you</span>.</p>
       </div>
 
       <form class="npo-form" id="new-po-form" autocomplete="off">
@@ -333,18 +326,16 @@
       </table>
       <p class="empty-note" id="pos-empty" hidden>No purchase orders match this filter.</p>
     </div>
-    <p class="hint po-foot">Every read goes through <code>backend/db.py</code>, so this table is
-       the seam where a real ERP would be plugged in. Values are the seeded procurement master;
-       the <b>Billed</b> column is a live ledger that each approved invoice writes to.</p>
+    <p class="hint po-foot">Reads go through <code>backend/db.py</code> &mdash; the seam where a
+       real ERP would plug in. <b>Billed</b> is a live ledger each approved invoice writes to.</p>
   </section>
 
   <!-- ================================================ LAYOUTS ============ -->
   <section class="panel" id="panel-layouts">
     <div class="sec-head">
       <h2>Invoice layouts it reads</h2>
-      <p class="sec-sub">Five vendors, five genuinely different documents. If every sample
-         used one template the extraction step would be filling in a form, not reading an
-         invoice - so each one hides the same facts somewhere else.</p>
+      <p class="sec-sub">Five vendors, five genuinely different documents &mdash; each one puts
+         the same facts somewhere else.</p>
     </div>
     <div class="layouts" id="layouts"></div>
   </section>
@@ -354,37 +345,31 @@
 
     <div class="sec-head">
       <h2>What every invoice is checked against</h2>
-      <p class="sec-sub">An invoice on its own proves nothing. Each of the nine checks
-         compares it against a specific piece of reference data, and all of it is here:
-         who we are allowed to pay, what was ordered, what has already been billed, and
-         the thresholds that decide how much variance is acceptable.</p>
+      <p class="sec-sub">The reference data behind the nine checks, and the thresholds that
+         decide how much variance is acceptable.</p>
     </div>
 
     <div class="srcmap">
       <article class="src">
         <div class="src-k">Approved vendors</div>
-        <p class="src-d">The list of suppliers we are allowed to pay at all. An invoice from
-           anyone else, or from a blocked vendor, cannot be paid.</p>
+        <p class="src-d">Who we are allowed to pay at all.</p>
         <div class="src-r"><b>R3</b> vendor is approved</div>
       </article>
       <article class="src">
         <div class="src-k">Purchase orders</div>
-        <p class="src-d">What was actually ordered and for how much, plus the running total
-           of everything billed against each one.</p>
+        <p class="src-d">What was ordered, and what has been billed against it.</p>
         <div class="src-r"><b>R4</b> a PO was matched &middot; <b>R5</b> within tolerance
            &middot; <b>R6</b> not over-consumed</div>
       </article>
       <article class="src">
         <div class="src-k">Processed history</div>
-        <p class="src-d">Every invoice seen before, by file hash and by vendor/amount/date,
-           so the same bill cannot be paid twice.</p>
+        <p class="src-d">Every invoice seen before, by file hash and by vendor/amount/date.</p>
         <div class="src-r"><b>R7</b> not a duplicate &mdash;
            <button class="linkish" data-goto="dashboard" type="button">see the history</button></div>
       </article>
       <article class="src">
         <div class="src-k">The document itself</div>
-        <p class="src-d">Its own text layer, used to verify every figure the model reported
-           and to judge how much to trust the reading.</p>
+        <p class="src-d">Its own text layer, used to verify every figure the model reported.</p>
         <div class="src-r"><b>R1</b> fields present &middot; <b>R2</b> arithmetic
            &middot; <b>R8</b> date &middot; <b>R9</b> confidence</div>
       </article>
@@ -393,8 +378,8 @@
     <div class="card">
       <div class="card-head">
         <h2>Rule set</h2>
-        <p class="hint">Served from <code>/api/rules</code>, the same definitions the engine
-           applies - so what you read here cannot drift from what ran.</p>
+        <p class="hint">Served from <code>/api/rules</code> &mdash; the same definitions the
+           engine applies.</p>
       </div>
       <div id="rules-list" class="rules-list"></div>
     </div>
@@ -402,8 +387,7 @@
     <div class="card">
       <div class="card-head">
         <h2>Thresholds</h2>
-        <p class="hint">Change a value, save, then re-run any invoice. The decision changes
-           because the rules are configuration, not hardcoded output.</p>
+        <p class="hint">Change a value, save, then re-run any invoice.</p>
       </div>
       <form id="config-form" class="config-form"></form>
       <div class="card-actions">
@@ -416,9 +400,8 @@
     <div class="card">
       <div class="card-head">
         <h2>Purchase orders</h2>
-        <p class="hint">The budget every invoice is checked against, and the ledger rules
-           <b>R4</b>, <b>R5</b> and <b>R6</b> are decided on. It is large enough to deserve
-           its own page.</p>
+        <p class="hint">The budget and ledger rules <b>R4</b>, <b>R5</b> and <b>R6</b> are
+           decided on.</p>
       </div>
       <div class="card-actions">
         <button class="btn btn-ghost" data-goto="pos" type="button">Open the purchase-order master</button>
@@ -428,15 +411,12 @@
     <div class="card">
       <div class="card-head">
         <h2>Approved vendors</h2>
-        <p class="hint">Rule <b>R3</b> resolves the name printed on the invoice against this
-           list &mdash; by GSTIN first, then by fuzzy name match above the score floor. A
-           vendor who is blocked matches confidently and is still rejected, which is a
-           different outcome from one nobody can identify.</p>
+        <p class="hint">Rule <b>R3</b> resolves the printed name against this list &mdash; GSTIN
+           first, then fuzzy name match above the score floor.</p>
       </div>
       <div class="card-actions">
         <button class="btn btn-primary btn-sm" data-add-vendor type="button">Add a vendor</button>
-        <span class="hint">They become available immediately, on this page and in the
-           purchase-order form.</span>
+        <span class="hint">Available immediately, here and in the purchase-order form.</span>
       </div>
       <div class="table-wrap">
         <table class="grid" id="vendors-table">
@@ -451,8 +431,7 @@
     <div class="card">
       <div class="card-head">
         <h2>Model telemetry</h2>
-        <p class="hint">Real API calls only. Cache hits and offline fixture runs are excluded
-           from the latency percentiles and the cost estimate.</p>
+        <p class="hint">Real API calls only &mdash; cache hits and fixture runs are excluded.</p>
       </div>
       <div class="tiles tiles-sm" id="telemetry-tiles"></div>
       <div id="telemetry-models"></div>
@@ -462,8 +441,8 @@
     <div class="card">
       <div class="card-head">
         <h2>Demo data</h2>
-        <p class="hint">An approved invoice books consumption against its PO, which changes what
-           the next run of the same invoice decides. Reset between takes.</p>
+        <p class="hint">An approved invoice books consumption against its PO. Reset between
+           takes.</p>
       </div>
       <div class="card-actions">
         <button class="btn btn-ghost" id="reseed-btn" type="button">Reset purchase orders</button>
@@ -486,13 +465,10 @@
       <header class="doc-head">
         <p class="doc-kicker">Documentation</p>
         <h1>How this system works</h1>
-        <p class="doc-lead">An invoice arrives as a PDF. Somebody has to decide whether to pay
-           it, and be able to say why. This is what happens in between &mdash; in the order it
-           happens, with a picture of each mechanism.</p>
-        <p class="doc-claim"><b>The model reads. The code decides.</b> Reading an invoice is
-           fuzzy and needs a model. A payment decision has to be explainable, repeatable and
-           defensible to a finance team &mdash; so it is plain code over published numbers, and
-           nothing here asks a model what to do.</p>
+        <p class="doc-lead">An invoice arrives as a PDF and somebody has to decide whether to
+           pay it, and say why. This is what happens in between.</p>
+        <p class="doc-claim"><b>The model reads. The code decides.</b> Nothing here asks a model
+           what to do.</p>
       </header>
 
       <!-- 1 -->
@@ -500,12 +476,8 @@
         <h2>1. The problem</h2>
         <p>Before an invoice can be paid, three questions have to be answered, and no single
            document answers any of them: <b>are we allowed to pay this supplier</b>,
-           <b>did we order this</b>, and <b>have we paid it already?</b> Each one is settled
-           against a different record held somewhere else.</p>
-        <p>Done by hand, that is a person with four browser tabs open, and the cost of getting it
-           wrong is asymmetric &mdash; an invoice paid twice is money gone, while an invoice
-           queried a day late is a phone call. So the job is not to be clever. It is to be right,
-           to be quick about the obvious cases, and to say plainly what it did.</p>
+           <b>did we order this</b>, and <b>have we paid it already?</b> Each is settled against
+           a different record held somewhere else.</p>
 
         <div data-uml="decides"></div>
 
@@ -517,13 +489,12 @@
           </div>
           <div class="how-out is-flag">
             <b>Flag</b>
-            <span>The work is done and something still needs a human eye. The most useful of
-               the three, and the most common.</span>
+            <span>The work is done and something still needs a human eye.</span>
           </div>
           <div class="how-out is-reject">
             <b>Reject</b>
-            <span>Something no amount of reviewing will fix &mdash; an unapproved supplier, a
-               duplicate, a budget already spent.</span>
+            <span>Something reviewing will not fix &mdash; an unapproved supplier, a duplicate,
+               a budget already spent.</span>
           </div>
         </div>
       </section>
@@ -531,16 +502,13 @@
       <!-- 2 -->
       <section class="doc-sec" id="doc-steps">
         <h2>2. The seven steps</h2>
-        <p>Every invoice takes the same seven steps, in the same order. You can watch them happen
-           on the <button class="linkish" data-goto="run" type="button">Check an invoice</button>
-           page: each step says what it is doing while it runs, then what it found.</p>
+        <p>Every invoice takes the same seven steps, in the same order. Watch them happen on the
+           <button class="linkish" data-goto="run" type="button">Check an invoice</button>
+           page &mdash; each one says what it is doing, then what it found.</p>
 
         <div data-uml="steps"></div>
 
-        <p>Splitting the work this way is not decoration. A slow step becomes legible instead of
-           worrying, a failure is attributable to one step rather than to &ldquo;the
-           system&rdquo;, and the record of what happened is written by the thing that happened
-           rather than reconstructed afterwards.</p>
+        <p>A failure is then attributable to one step rather than to &ldquo;the system&rdquo;.</p>
       </section>
 
       <!-- 3 -->
@@ -549,94 +517,76 @@
         <p>Step 2 is the only one that uses a model, and it is asked exactly one thing: report
            what is printed on this page &mdash; the supplier, the dates, the amounts, the purchase
            order it names &mdash; and for every figure, the words it was read from.</p>
-        <p>Step 3 then goes back to the document and looks those words up in its own text. A
-           figure whose words are found is a figure the system checked; one whose words are not
-           is a figure it only has a claim about. That distinction is the whole of how much it
-           trusts a reading.</p>
+        <p>Step 3 looks those words up in the document's own text. A figure whose words are
+           found is one the system checked; a figure whose words are not is one it only has a
+           claim about.</p>
 
         <div data-uml="reading"></div>
-
-        <p>It is also why the five sample invoices use five genuinely different layouts. If every
-           one were the same template, step 2 would be filling in a form rather than reading an
-           invoice, and the demonstration would prove nothing.</p>
       </section>
 
       <!-- 4 -->
       <section class="doc-sec" id="doc-against">
         <h2>4. What it checks against</h2>
-        <p>An invoice on its own proves nothing. Each of the nine checks holds it against one
-           specific record &mdash; and which record is the whole reason the check can say
-           anything.</p>
+        <p>Each of the nine checks holds the invoice against one specific record.</p>
 
         <div data-uml="against"></div>
 
-        <p>The nine are listed in full, with the live number each one uses, on the
+        <p>All nine are listed, with the live number each uses, on the
            <button class="linkish" data-goto="admin" type="button">Rules &amp; data</button>
-           page. Those numbers are configuration, not something compiled in: change the purchase
-           order tolerance from 2% to 10%, re-run the same invoice, and the answer changes from
-           flagged to approved. That round trip is asserted by a test, which is the only reason
-           the claim is worth making.</p>
+           page. Change the purchase-order tolerance from 2% to 10%, re-run the same invoice, and
+           the answer changes from flagged to approved &mdash; a round trip a test asserts.</p>
 
         <h3>Why the worst result wins</h3>
-        <p>Nine checks produce nine results, and the decision is the most serious failure among
-           them. That is a pure function of the results &mdash; same invoice, same reference data,
-           same answer, every time. No score is averaged, nothing is weighted, and nothing is
-           asked to use its judgement.</p>
+        <p>The decision is the most serious failure among the nine results &mdash; a pure
+           function of them, so the same invoice and the same reference data always give the same
+           answer. Nothing is averaged or weighted.</p>
       </section>
 
       <!-- 5 -->
       <section class="doc-sec" id="doc-stored">
         <h2>5. What gets written down</h2>
-        <p>Each step writes its own row as it happens, with what it did, how long it took and
-           what it produced. Those rows are not a log <i>of</i> the interface &mdash; they
-           <i>are</i> the interface.</p>
+        <p>Each step writes its own row as it happens &mdash; what it did, how long it took,
+           what it produced. Those rows are what the interface renders.</p>
 
         <div data-uml="stored"></div>
 
-        <p>The ledger is what makes this stateful rather than a per-document checker. An approved
-           invoice books what it spent against its purchase order, so the <i>next</i> invoice
-           against that order is judged against a budget this one already moved. That is the
-           split-invoice case exactly: two invoices each perfectly reasonable alone, where only
-           the running total sees the problem.</p>
+        <p>The ledger is what makes this stateful. An approved invoice books what it spent
+           against its purchase order, so the <i>next</i> invoice is judged against a budget this
+           one already moved &mdash; the split-invoice case, where only the running total sees
+           the problem.</p>
       </section>
 
       <!-- 6 -->
       <section class="doc-sec" id="doc-raise">
         <h2>6. Raising a purchase order yourself</h2>
-        <p>The other half of the loop. A purchase order with no invoice against it demonstrates
-           nothing, so the system can write one and put it through the same seven steps.</p>
+        <p>The other half of the loop: the system can write an invoice against a purchase order
+           you raise and put it through the same seven steps.</p>
 
         <div data-uml="raise"></div>
 
         <p>What you raise goes into the same table the pipeline matches against, tagged as yours
            so it is never confused with the seeded demo data. The invoice it writes is a real PDF
-           with real text on the page, submitted exactly the way a file you drag in would be
-           &mdash; the pipeline is not told where it came from.</p>
+           with real text on the page, submitted the way a dragged-in file is &mdash; the pipeline
+           is not told where it came from.</p>
         <p>Each of the three states the verdict it <i>should</i> earn before it runs, and the run
-           view shows that beside what the rules actually decided. A demonstration that announces
-           its expectation first is one you can catch being wrong.</p>
+           view shows that beside what the rules decided.</p>
       </section>
 
       <!-- 7 -->
       <section class="doc-sec" id="doc-limits">
         <h2>7. What it deliberately does not do</h2>
-        <p>Each of these is a real limit on what is being shown, so each is stated rather than
-           left to be discovered.</p>
+        <p>Real limits on what is being shown, stated rather than left to be discovered.</p>
         <ul class="doc-list">
-          <li><b>Invoices arrive as a file, not by email.</b> Email intake is a listener in front
-             of step 1. It adds fragility to a live demonstration and no logic, so it is out of
-             scope.</li>
+          <li><b>Invoices arrive as a file, not by email.</b> Email intake is a listener in
+             front of step 1 &mdash; no logic, so it is out of scope.</li>
           <li><b>The vendor and purchase-order lists stand in for a procurement system.</b> The
              seam where a real one would plug in is real; the data behind it is invented.</li>
           <li><b>Everything is in rupees</b>, one entity, one tax regime. Multi-currency would
-             change every threshold comparison, so the build says so rather than pretending
-             otherwise.</li>
-          <li><b>Offline mode proves the deterministic half, not reading quality.</b> Its fixtures
-             are the true values of the generated samples, not recorded model output. Only a live
-             run is evidence about extraction.</li>
+             change every threshold comparison.</li>
+          <li><b>Offline mode proves the deterministic half, not reading quality.</b> Its
+             fixtures are the true values of the samples, not recorded model output.</li>
           <li><b>The thresholds are plausible mid-market values, not policy.</b> A real
-             deployment would replace every one of them, which is why they are editable rather
-             than compiled in.</li>
+             deployment would replace every one, which is why they are editable.</li>
         </ul>
       </section>
 
@@ -657,8 +607,8 @@
       <button class="modal-x" type="button" data-nv-close aria-label="Close">&times;</button>
     </div>
 
-    <p class="modal-lead">They join the approved master straight away, with the next free
-       id. An invoice is matched to them by name &mdash; and by tax number, if you give one.</p>
+    <p class="modal-lead">They join the approved master straight away, with the next free id,
+       matched by name &mdash; and by tax number, if you give one.</p>
 
     <form class="modal-form" id="nv-form" autocomplete="off">
       <label class="field">
