@@ -286,6 +286,26 @@ def active_provider() -> str:
     return _active_provider
 
 
+def _pin_belongs_to(pinned: str, provider: str) -> bool:
+    """Does an EXTRACTION_MODEL pin plausibly name a model of this provider?
+
+    Gemini and Anthropic ids carry a recognisable prefix. Groq ids have no
+    single prefix - they are vendor-qualified (`openai/gpt-oss-120b`,
+    `qwen/...`) - so the slash is what identifies them. Accepting any pin for
+    Groq instead, as this first did, meant a deployment that pins a Gemini
+    model globally (as render.yaml does) handed that name to Groq, which 404s
+    on it: the explain summary silently dropped to its rule-text fallback, and
+    the Groq leg of EXTRACTION_CHAIN was dead rather than merely untested.
+    """
+    prefix = {"anthropic": "claude", "gemini": "gemini"}.get(provider)
+    if prefix is not None:
+        return pinned.startswith(prefix)
+    if provider == "groq":
+        return "/" in pinned
+    # An unknown provider has no shape to test, so honour the pin.
+    return True
+
+
 def model_for(provider: str) -> str:
     """The model to use for a given provider.
 
@@ -295,12 +315,8 @@ def model_for(provider: str) -> str:
     API that has never heard of it.
     """
     pinned = os.getenv("EXTRACTION_MODEL", "").strip()
-    if pinned:
-        prefix = {"anthropic": "claude", "gemini": "gemini"}.get(provider)
-        # Groq model ids are vendor-prefixed (openai/..., qwen/...), so there is
-        # no single prefix to test; accept any pin for it.
-        if prefix is None or pinned.startswith(prefix):
-            return pinned
+    if pinned and _pin_belongs_to(pinned, provider):
+        return pinned
     return _DEFAULT_MODELS.get(provider, "gemini-3.5-flash")
 
 
